@@ -11,6 +11,7 @@ function dirigent(_div, _instructions, _plot_width) {
   // Bindings
   const xAccessor = d => d[_instructions["bindings"]["x"]];
   const yAccessor = d => d[_instructions["bindings"]["y"]];
+  const textAccessor = d => d[_instructions["bindings"]["text"]];
 
   // Dimensions
   let dimensions = {
@@ -39,6 +40,14 @@ dimensions.ctrHeight = dimensions.height - dimensions.marginTop - dimensions.mar
     .domain(scales.scale_expand(d3.extent(_instructions["data"], yAccessor), 0.05))
     .range([dimensions.ctrHeight, 0])
     .nice()
+     
+    // console.log(_instructions["data"].map(d => d.category).filter((value, index, array) => array.indexOf(value) === index).sort());
+  
+  const colorScale = d3.scaleOrdinal()
+  .domain(_instructions["data"].map(d => d.category).filter((value, index, array) => array.indexOf(value) === index).sort())
+  .range(d3.schemeSet3);
+
+  console.log(colorScale('Category 1'));
 
   // Make plot panel (excl. margins)
   svg = panel.plot_panel(svg, xScale, yScale, dimensions);
@@ -48,18 +57,14 @@ dimensions.ctrHeight = dimensions.height - dimensions.marginTop - dimensions.mar
   svg = axis.plot_axis(svg, xScale, yScale, dimensions,  _instructions["bindings"]["x"],  _instructions["bindings"]["y"]);
   
   // plot layers
-  // console.log(_instructions["layers"]).map(d => d[i]);
-  // svg = geoms.add_points(svg, _instructions["data"], xScale,  yScale, xAccessor, yAccessor)
-  // svg = geoms.add_text(svg, _instructions["data"], xScale,  yScale, xAccessor, yAccessor)
-  // console.log(svg.selectAll("#cirklar").nodes().map(d => d.getTotalLength()));
   for (let layer in _instructions.layers) {
     let layertype = _instructions.layers[layer]["geom"]; 
 
     if (layertype == "point") {
-      svg = geoms.add_points(svg, _instructions["data"], xScale,  yScale, xAccessor, yAccessor, _instructions.layers[layer]["attributes"])
+      svg = geoms.add_points(svg, _instructions["data"], xScale,  yScale, colorScale, xAccessor, yAccessor, textAccessor, _instructions.layers[layer]["attributes"])
     }
     if (layertype == "text") {
-      svg = geoms.add_text(svg, _instructions["data"], xScale,  yScale, xAccessor, yAccessor, _instructions.layers[layer]["attributes"])
+      svg = geoms.add_text(svg, _instructions["data"], xScale,  yScale, colorScale, xAccessor, yAccessor, textAccessor, _instructions.layers[layer]["attributes"])
     }
   };
 

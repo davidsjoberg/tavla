@@ -10,29 +10,27 @@ const data = Array.from({length: 15}, (_, i) => ({
 
 const instructions = {'bindings' : {"x" : "id", 
                                     "y" : "score",
-                                    "text" : "category"}, 
+                                    "text" : "category",
+                                    "color" : "category"}, 
                       "data" : data,
                       "layers" : {
-                          "layer1" :  {"geom" : "point",
-                                       "attributes": {"color" : "black",
-                                                      "size" : 70}},
+                          // "layer1" :  {"geom" : "point",
+                          //              "attributes": {"color" : "blue",
+                          //                             "size" : 70}},
                           "layer2" :  {"geom" : "point",
-                                       "attributes": {"color" : "red",
-                                                      "size" : 30}},
+                                       "attributes": {"stroke" : "black",
+                                                      "size" : 70}},
                           "layer3" :  {"geom" : "text",
-                                       "attributes": {"color" : "blue",
-                                                      "size" : "small"}}
+                                       "attributes": {"size" : "small"}
                                       }
-                        };
+                        }
+                      };
 
 const divid = "#viz";
 
 dirigent(divid, instructions, 700)
 
-// rita(data)
-//   .bindings(x = "year",
-//             y = "profit",
-//             label = "Company")
+// rita(x = "year", y = "profit", text = "Company")
 //   .points(fill = "blue")
 //   .text()
 //   .theme("basic")

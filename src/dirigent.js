@@ -47,8 +47,6 @@ dimensions.ctrHeight = dimensions.height - dimensions.marginTop - dimensions.mar
   .domain(_instructions["data"].map(d => d.category).filter((value, index, array) => array.indexOf(value) === index).sort())
   .range(d3.schemeSet3);
 
-  console.log(colorScale('Category 1'));
-
   // Make plot panel (excl. margins)
   svg = panel.plot_panel(svg, xScale, yScale, dimensions);
 

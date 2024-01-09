@@ -1,6 +1,6 @@
 export{add_points, add_text};
 
-function add_points(_svg, _data, _xscale, _yscale, _colorscale, _xaccessor, _yaccessor, _textaccessor, _attributes) {
+function add_points(_svg, _instructions, _xscale, _yscale, _colorscale, _attributes) {
 
     // Geom layer
 
@@ -9,22 +9,23 @@ function add_points(_svg, _data, _xscale, _yscale, _colorscale, _xaccessor, _yac
     //     d3.symbolsType.map(s => d3.symbol().type(s)())
     //   )
     
-    const color = d3.scaleOrdinal(d3.schemeCategory10)
+    // const color = d3.scaleOrdinal(d3.schemeCategory10)
 
     let geomPoint = _svg.append('g')
         .selectAll('.point')
-        .data(_data)
+        .data(_instructions['data'])
         .join('path')
         .attr(
             "transform",
-            d => `translate(${_xscale(_xaccessor(d))}, ${_yscale(_yaccessor(d))})`
+            d => `translate(${_xscale(d[_instructions['bindings']['x']])}, ${_yscale(d[_instructions['bindings']['y']])})`
       )
-        .attr("id", "symboler")
-        .attr("fill", d =>  _colorscale(_textaccessor(d)))
+        .attr("fill", d =>  _colorscale(d[_instructions['bindings']['color']]))
         // .attr("fill", d => color(d.species))
         // .attr("d", d => shape(d.category))
 
+
     for (let _attr in _attributes) {
+        console.log(_attr);
         if (_attr == "color") {
             geomPoint.attr("fill", _attributes[_attr])
         }
@@ -41,26 +42,26 @@ function add_points(_svg, _data, _xscale, _yscale, _colorscale, _xaccessor, _yac
       
           }
 
-function add_text(_svg, _data, _xscale, _yscale, _colorscale, _xaccessor, _yaccessor, _textaccessor, _attributes) {
+function add_text(_svg, _instructions, _xscale, _yscale, _colorscale, _attributes) {
 
 // Geom layer 
     let geomText = _svg.append('g').selectAll('text')
-        .data(_data)
+        .data(_instructions['data'])
         .join('text')
-        .attr('x', d => _xscale(_xaccessor(d)))
-        .attr('y', d => _yscale(_yaccessor(d))-15)
+        .attr('x', d => _xscale(d[_instructions['bindings']['x']]))
+        .attr('y', d => _yscale(d[_instructions['bindings']['y']])-15)
         .attr('text-anchor', "middle")
-        .text(d => d.category)
-        .attr('fill', d => _colorscale(_textaccessor(d)));
+        .text(d => d[_instructions['bindings']['text']])
+        .attr('fill', d => _colorscale(d[_instructions['bindings']['color']]));
 
-    // for (let _attr in _attributes) {
-    //     if (_attr == "color") {
-    //         geomText.attr("color", _attributes[_attr])
-    //     }
-    //     if (_attr === "size") {
-    //         geomText.attr("font-size", _attributes[_attr])
-    //     }
-    //     };
+    for (let _attr in _attributes) {
+        if (_attr == "color") {
+            geomText.attr("color", _attributes[_attr])
+        }
+        if (_attr === "size") {
+            geomText.attr("font-size", _attributes[_attr])
+        }
+        };
         
     return(_svg)
     

@@ -1,5 +1,6 @@
 export{plot_panel}
 export {small_grid};
+export {panel_dimensions};
 
 function small_grid(A, domain) {
     let middle_pos = []
@@ -17,6 +18,22 @@ function small_grid(A, domain) {
     }
     return middle_pos
     }
+
+function panel_dimensions(_plot_width) {
+    // Dimensions
+    let dimensions = {
+      width: _plot_width,
+      height: _plot_width / 1.4,
+      marginTop: _plot_width / 60,
+      marginRight: _plot_width / 10,
+      marginBottom: _plot_width / 10,
+      marginLeft: _plot_width / 12
+  };
+    dimensions.ctrWidth = dimensions.width - dimensions.marginLeft - dimensions.marginRight
+    dimensions.ctrHeight = dimensions.height - dimensions.marginTop - dimensions.marginBottom
+
+    return dimensions
+}
   
 function plot_panel(_svg, _xscale, _yscale, _dimensions) {
 
@@ -25,7 +42,6 @@ function plot_panel(_svg, _xscale, _yscale, _dimensions) {
       "transform",
       `translate(${_dimensions.marginLeft}, ${_dimensions.marginTop})`,
     )
-    .attr("id", "panel")
 
     _svg.append("rect")
       .attr("width", _dimensions.ctrWidth)

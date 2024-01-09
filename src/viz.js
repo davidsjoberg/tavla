@@ -1,7 +1,7 @@
 import { dirigent } from "./dirigent.js";
 
 // Create a dataset with randomized data
-const data = Array.from({length: 15}, (_, i) => ({
+const data = Array.from({length: 1000}, (_, i) => ({
   id: i,
   score: Math.random(),
   category: `Category ${Math.ceil(Math.random() * 5)}`

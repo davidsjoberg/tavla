@@ -50,3 +50,10 @@ function scale_expand(range_array, mult) {
     return [range_array[0]-domain*mult, range_array[1]+domain*mult]
   }
 
+
+      // const shape = d3.scaleOrdinal(
+    //     penguins.map(d => d.species),
+    //     d3.symbolsType.map(s => d3.symbol().type(s)())
+    //   )
+    
+    // const color = d3.scaleOrdinal(d3.schemeCategory10)

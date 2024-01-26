@@ -2,44 +2,69 @@ export{loop_over_layers, add_text};
 
 function loop_over_layers(_svg, _instructions) {
     for (let layer in _instructions.layers) {
-        const { geometry, accessors, scales, groupies, attributes } = _instructions.layers[layer];
+        const { geometry, accessors, scales, delegations, attributes } = _instructions.layers[layer];
+        const { var_bindings, var_attributes, var_groupies } = delegations;
         
         switch (geometry) {
+
+            //////// POINTS //////////
             case "point":
-                const geomPoint = _svg.append('g')
+                const groupedPointData = d3.group(_instructions.data, d => {
+                    const groupKey = var_groupies.map(key => accessors[key](d));
+                    return groupKey.join('|'); 
+                });
+                
+                const geomPoints = _svg.append('g')
+                    .selectAll('.point-group')
+                    .data(groupedPointData)
+                    .join('g')
+                    .attr('class', 'point-group')
                     .selectAll('.point')
-                    .data(_instructions.data)
+                    .data(d => d[1]) // Use the grouped data array for each point
                     .join('path')
-                    .attr('transform', d => `translate(${scales.x(accessors.x(d))}, ${scales.y(accessors.y(d))})`);
+                    .attr('transform', d => `translate(${scales.x(accessors.x(d))}, ${scales.y(accessors.y(d))})`)
+                    .attr('fill', 'blue');
+                    // .attr('d', d3.symbol().size(50).type(d3.symbolCircle));
 
-                if (accessors.size) {
-                    geomPoint.attr('d', d3.symbol().size(d => scales.size(accessors.size(d))));
+                // size
+                if (var_bindings.includes('size')) {
+                    geomPoints.attr('d', d3.symbol().size(d => scales.size(accessors.size(d))));
+                } else if (var_attributes.includes('size')) {
+                    geomPoints.attr('d', d3.symbol().size(attributes.size * 64).type(d3.symbolCircle));
                 } else {
-                    geomPoint.attr('d', d3.symbol().size(attributes.size || 64).type(d3.symbolCircle));
+                    geomPoints.attr('d', d3.symbol().size(64).type(d3.symbolCircle));
                 }
 
-                if (accessors.color) {
-                    geomPoint.attr('fill', d => scales.color(accessors.color(d)));
-                } else if (attributes.color) {
-                    geomPoint.attr('fill', attributes.color);
+                // color
+                if (var_bindings.includes('color')) {
+                    geomPoints.attr('fill', d => scales.color(accessors.color(d)));
+                } else if (var_attributes.includes('color')) {
+                    geomPoints.attr('fill', attributes.color);
+                } else {
+                    geomPoints.attr('fill', 'black');
                 }
 
-                if (accessors.stroke) {
-                    geomPoint.attr('stroke', d => scales.stroke(accessors.stroke(d)));
-                } else if (attributes.stroke) {
-                    geomPoint.attr('stroke', attributes.stroke);
+                // stroke
+                if (var_bindings.includes('stroke')) {
+                    geomPoints.attr('stroke', d => scales.stroke(accessors.stroke(d)));
+                } else if (var_attributes.includes('stroke')) {
+                    geomPoints.attr('stroke', attributes.stroke);
+                } else {
+                    geomPoints.attr('stroke', 'none')
                 }
+
                 break;
-
+            
+            //////// LINES //////////
             case "line":
-                const groupedData = d3.group(_instructions.data, d => {
-                    const groupKey = groupies.map(key => accessors[key](d));
+                const groupedLineData = d3.group(_instructions.data, d => {
+                    const groupKey = var_groupies.map(key => accessors[key](d));
                     return groupKey.join('|'); // Use a separator to create a unique key
                 });
 
                 const geomLines = _svg.append('g')
                     .selectAll('.line-group')
-                    .data(groupedData)
+                    .data(groupedLineData)
                     .join('g')
                     .attr('class', 'line-group')
                     .selectAll('.line')
@@ -51,23 +76,69 @@ function loop_over_layers(_svg, _instructions) {
                     )
                     .attr('fill', 'none')
 
-                if (accessors.size) {
+                // size
+                if (var_bindings.includes('size')) {
                     geomLines.attr('stroke-width', d => scales.size(accessors.size(d[0])));
-                } else if (attributes.size) {
+                } else if (var_attributes.includes('size')) {
                     geomLines.attr('stroke-width', attributes.size);
-                }
+                } else {
+                    geomLines.attr('stroke-width', 3);
+                }            
 
-                console.log(accessors)
-                console.log(attributes)
-                console.log(scales.color)
-                if (accessors.color && !attributes.color) {
-                    console.log('hej')
+                // // color
+                if (var_bindings.includes('color')) {
                     geomLines.attr('stroke', d => scales.color(accessors.color(d[0])));
-                } else if (accessors.color && attributes.color) {
+                } else if (var_attributes.includes('color')) {
                     geomLines.attr('stroke', attributes.color);
                 } else {
                     geomLines.attr('stroke', 'black');
                 }
+
+                break;
+
+            
+            //////// Texts //////////
+            case "text":
+                const groupedTextData = d3.group(_instructions.data, d => {
+                    const groupKey = var_groupies.map(key => accessors[key](d));
+                    return groupKey.join('|');
+                });
+                
+                const textElements = _svg.append('g')
+                    .selectAll('.text-group')
+                    .data(groupedTextData)
+                    .join('g')
+                    .attr('class', 'text-group')
+                    .selectAll('text')
+                    .data(d => d[1])
+                    .join('text')
+                    .attr('x', d => scales.x(accessors.x(d)))
+                    .attr('y', d => scales.y(accessors.y(d)))
+                    .text(d => accessors.text(d));
+                
+                // size
+                if (var_bindings.includes('size')) {
+                    console.log('vaaaaa');
+                    // textElements.attr('font-size', d => Math.pow(scales.size(accessors.size(d)), 0.2)*5);
+                    textElements.attr('font-size', d => Math.pow(scales.size(accessors.size(d)), 0.2)*7);
+                } else if (var_attributes.includes('size')) {
+                    textElements.attr('font-size', attributes.size);
+                } else {
+                    textElements.attr('font-size', 20);
+                }            
+
+                // color
+                console.log('this', var_attributes);
+                if (var_bindings.includes('color')) {
+                    textElements.attr('fill', d => scales.color(accessors.color(d)));
+                } else if (var_attributes.includes('color')) {
+                    // textElements.attr('fill', var_attributes.color)
+                    textElements.attr('fill', attributes.color)
+                } else {
+                    textElements.attr('fill', 'black');
+                }
+
+                break;
 
         }
     }

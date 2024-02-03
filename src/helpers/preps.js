@@ -1,6 +1,6 @@
 export {prepare_extended_instructions};
     
-function prepare_extended_instructions(_instructions, _scale_functions) {
+function prepare_extended_instructions(_instructions) {
     // This function prepares everything that each layer need to know except data
 
     // Support funs
@@ -22,6 +22,11 @@ function prepare_extended_instructions(_instructions, _scale_functions) {
             accepted_bindings: ['x', 'y', 'color'],
             grouping_bindings: ['color']
         },
+        bar: {
+            required_bindings: ['x', 'y'],
+            accepted_bindings: ['x', 'y', 'color'],
+            grouping_bindings: []
+        },
         text: {
             required_bindings: ['x', 'y', 'text'],
             accepted_bindings: ['x', 'y', 'text', 'color', 'size'],
@@ -34,8 +39,33 @@ function prepare_extended_instructions(_instructions, _scale_functions) {
 
         /////////// LAYER PARAMS /////////////
         const layertype = _instructions.layers[layer].geometry;
-        const attributes = Object.keys(_instructions.layers[layer].attributes);
-        const declared_bindings = Object.keys(_instructions.bindings)
+
+        // Populate attributes with nonense if null (so that it works)
+        let attributes;
+        if (_instructions.layers[layer].attributes == null) {
+            attributes = ['not_something_real'];
+        } else {
+            attributes = Object.keys(_instructions.layers[layer].attributes);
+        }
+
+        // Layer bindints should be overrided if layer specified
+        let layer_bindings_and_cols = { ..._instructions.bindings }; // Shallow copy of _instructions.bindings
+        if (layer.bindings) {
+            const updated_bindings = Object.keys(_instructions.layers[layer].bindings);
+
+            updated_bindings.forEach(key => {
+                // Check if the key exists in _instructions.bindings
+                if (layer_bindings_and_cols.hasOwnProperty(key)) {
+                    // Replace the value in _instructions.bindings with the value from layer.bindings
+                    layer_bindings_and_cols[key] = layer.bindings[key];
+                } else {
+                    // If the key does not exist, add it to layer_bindings_and_cols
+                    layer_bindings_and_cols[key] = layer.bindings[key];
+                }
+            });
+}
+        let declared_bindings = Object.keys(layer_bindings_and_cols)
+        console.log(layer_bindings_and_cols);
 
         const { required_bindings, accepted_bindings, grouping_bindings } = binding_rules[layertype];
 
@@ -81,7 +111,7 @@ function prepare_extended_instructions(_instructions, _scale_functions) {
 
         // Filter _instructions.bindings based on keys not in array1 or array2
         const filteredBindings = Object.fromEntries(
-            Object.entries(_instructions.bindings)
+            Object.entries(layer_bindings_and_cols)
                 .filter(([key, _]) => grouping_bindings.includes(key) || (!attributes.includes(key)))
                 .filter(([key, _]) => accepted_bindings.includes(key))
         );
@@ -102,9 +132,9 @@ function prepare_extended_instructions(_instructions, _scale_functions) {
         /////////// EXTEND INSTRUCTIONS ////////////
         _instructions.layers[layer].delegations = delegates;
         _instructions.layers[layer].accessors = accessors;
-        _instructions.layers[layer].scales = Object.fromEntries(
-            Object.entries(_scale_functions)
-        );
+        // _instructions.layers[layer].scales = Object.fromEntries(
+        //     Object.entries(_scale_functions)
+        // );
     }
 
     return _instructions;

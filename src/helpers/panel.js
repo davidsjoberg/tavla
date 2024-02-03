@@ -35,68 +35,89 @@ function panel_dimensions(_plot_width) {
     return dimensions
 }
   
-function plot_panel(_svg, _xscale, _yscale, _dimensions) {
 
-    _svg = _svg.append("g")
-    .attr(
-      "transform",
-      `translate(${_dimensions.marginLeft}, ${_dimensions.marginTop})`,
-    )
+function plot_panel(_svg, _instructions) {
 
-    _svg.append("rect")
-      .attr("width", _dimensions.ctrWidth)
-      .attr("height", _dimensions.ctrHeight)
+  ///////// PANEL //////////
+  _svg = _svg.append("g")
+      .attr(
+          "transform",
+          `translate(${_instructions.dimensions.marginLeft}, ${_instructions.dimensions.marginTop})`,
+      );
+
+  _svg.append("rect")
+      .attr("width", _instructions.dimensions.ctrWidth)
+      .attr("height", _instructions.dimensions.ctrHeight)
       .attr("fill", "#ebebeb");
 
+  ///////// X GRID //////////
+  switch(_instructions.scalesAndTypes.x.type) {
+    case 'number':
       const xGrid = (g) => g
-      .style('stroke', 'white')
-      .style('stroke-width', 1.5)
-      .selectAll('line')
-      .data(_xscale.ticks(5))
-      .join('line')
-      .attr('x1', d => _xscale(d))
-      .attr('x2', d => _xscale(d))
-      .attr('y1', 0)
-      .attr('y2', _dimensions.ctrHeight)
+        .style('stroke', 'white')
+        .style('stroke-width', 1.5)
+        .selectAll('line')
+        .data(_instructions.scalesAndTypes.x.scale.ticks(5))
+        .join('line')
+        .attr('x1', d => _instructions.scalesAndTypes.x.scale(d))
+        .attr('x2', d => _instructions.scalesAndTypes.x.scale(d))
+        .attr('y1', 0)
+        .attr('y2', _instructions.dimensions.ctrHeight);
 
-    const xGridMinor = (g) => g
-      .style('stroke', 'white')
-      .style('stroke-width', .5)
-      .selectAll('line')
-      .data(small_grid(_xscale.ticks(5), _xscale.domain()))
-      .join('line')
-      .attr('x1', d => _xscale(d))
-      .attr('x2', d => _xscale(d))
-      .attr('y1', 0)
-      .attr('y2', _dimensions.ctrHeight)
+      const xGridMinor = (g) => g
+        .style('stroke', 'white')
+        .style('stroke-width', .5)
+        .selectAll('line')
+        .data(small_grid(_instructions.scalesAndTypes.x.scale.ticks(5), _instructions.scalesAndTypes.x.scale.domain()))
+        .join('line')
+        .attr('x1', d => _instructions.scalesAndTypes.x.scale(d))
+        .attr('x2', d => _instructions.scalesAndTypes.x.scale(d))
+        .attr('y1', 0)
+        .attr('y2', _instructions.dimensions.ctrHeight);
 
-    const yGrid = (g) => g
-          .style('stroke', 'white')
-          .style('stroke-width', 1.5)
-          .selectAll('line')
-          .data(_yscale.ticks(4))
-          .join('line')
-          .attr('y1', d => _yscale(d))
-          .attr('y2', d => _yscale(d))
-          .attr('x1', 0)
-          .attr('x2', _dimensions.ctrWidth)
+      _svg.append('g').call(xGridMinor);
+      _svg.append('g').call(xGrid);
+      break;
 
-    const yGridMinor = (g) => g
-          .style('stroke', 'white')
-          .style('stroke-width', 0.5)
-          .selectAll('line')
-          .data(small_grid(_yscale.ticks(4), _yscale.domain()))
-          .join('line')
-          .attr('y1', d => _yscale(d))
-          .attr('y2', d => _yscale(d))
-          .attr('x1', 0)
-          .attr('x2', _dimensions.ctrWidth)
+    case 'discrete':
 
-        _svg.append('g').call(yGrid)
-        _svg.append('g').call(xGrid)
-        _svg.append('g').call(yGridMinor)
-        _svg.append('g').call(xGridMinor)
+  }
+  
+  ///////// Y GRID //////////
+  switch(_instructions.scalesAndTypes.y.type) {
+    case 'number':
+      const yGrid = (g) => g
+        .style('stroke', 'white')
+        .style('stroke-width', 1.5)
+        .selectAll('line')
+        .data(_instructions.scalesAndTypes.y.scale.ticks(4))
+        .join('line')
+        .attr('y1', d => _instructions.scalesAndTypes.y.scale(d))
+        .attr('y2', d => _instructions.scalesAndTypes.y.scale(d))
+        .attr('x1', 0)
+        .attr('x2', _instructions.dimensions.ctrWidth);
 
-return(_svg)
+      const yGridMinor = (g) => g
+        .style('stroke', 'white')
+        .style('stroke-width', 0.5)
+        .selectAll('line')
+        .data(small_grid(_instructions.scalesAndTypes.y.scale.ticks(4), _instructions.scalesAndTypes.y.scale.domain()))
+        .join('line')
+        .attr('y1', d => _instructions.scalesAndTypes.y.scale(d))
+        .attr('y2', d => _instructions.scalesAndTypes.y.scale(d))
+        .attr('x1', 0)
+        .attr('x2', _instructions.dimensions.ctrWidth);
 
-    }
+      _svg.append('g').call(yGridMinor);
+      _svg.append('g').call(yGrid);
+      break;
+
+    case 'discrete':
+
+  }
+  
+
+
+
+  return _svg;
+}

@@ -1,8 +1,9 @@
-export{loop_over_layers, add_text};
+export{loop_over_layers};
 
 function loop_over_layers(_svg, _instructions) {
+    const { scalesAndTypes } = _instructions;
     for (let layer in _instructions.layers) {
-        const { geometry, accessors, scales, delegations, attributes } = _instructions.layers[layer];
+        const { geometry, accessors, delegations, attributes } = _instructions.layers[layer];
         const { var_bindings, var_attributes, var_groupies } = delegations;
         
         switch (geometry) {
@@ -22,22 +23,21 @@ function loop_over_layers(_svg, _instructions) {
                     .selectAll('.point')
                     .data(d => d[1]) // Use the grouped data array for each point
                     .join('path')
-                    .attr('transform', d => `translate(${scales.x(accessors.x(d))}, ${scales.y(accessors.y(d))})`)
+                    .attr('transform', d => `translate(${scalesAndTypes.x.scale(accessors.x(d))}, ${scalesAndTypes.y.scale(accessors.y(d))})`)
                     .attr('fill', 'blue');
-                    // .attr('d', d3.symbol().size(50).type(d3.symbolCircle));
 
                 // size
                 if (var_bindings.includes('size')) {
-                    geomPoints.attr('d', d3.symbol().size(d => scales.size(accessors.size(d))));
+                    geomPoints.attr('d', d3.symbol().size(d => scalesAndTypes.size.scale(accessors.size(d))));
                 } else if (var_attributes.includes('size')) {
                     geomPoints.attr('d', d3.symbol().size(attributes.size * 64).type(d3.symbolCircle));
                 } else {
                     geomPoints.attr('d', d3.symbol().size(64).type(d3.symbolCircle));
                 }
 
-                // color
+                // colorss
                 if (var_bindings.includes('color')) {
-                    geomPoints.attr('fill', d => scales.color(accessors.color(d)));
+                    geomPoints.attr('fill', d => scalesAndTypes.color.scale(accessors.color(d)));
                 } else if (var_attributes.includes('color')) {
                     geomPoints.attr('fill', attributes.color);
                 } else {
@@ -46,7 +46,7 @@ function loop_over_layers(_svg, _instructions) {
 
                 // stroke
                 if (var_bindings.includes('stroke')) {
-                    geomPoints.attr('stroke', d => scales.stroke(accessors.stroke(d)));
+                    geomPoints.attr('stroke', d => scalesAndTypes.stroke.scale(accessors.stroke(d)));
                 } else if (var_attributes.includes('stroke')) {
                     geomPoints.attr('stroke', attributes.stroke);
                 } else {
@@ -71,14 +71,14 @@ function loop_over_layers(_svg, _instructions) {
                     .data(d => [d[1]]) // Use the grouped data array for each line
                     .join('path')
                     .attr('d', d3.line()
-                        .x(d => scales.x(accessors.x(d)))
-                        .y(d => scales.y(accessors.y(d)))
+                        .x(d => scalesAndTypes.x.scale(accessors.x(d)))
+                        .y(d => scalesAndTypes.y.scale(accessors.y(d)))
                     )
                     .attr('fill', 'none')
 
                 // size
                 if (var_bindings.includes('size')) {
-                    geomLines.attr('stroke-width', d => scales.size(accessors.size(d[0])));
+                    geomLines.attr('stroke-width', d => scalesAndTypes.size.scale(accessors.size(d[0])));
                 } else if (var_attributes.includes('size')) {
                     geomLines.attr('stroke-width', attributes.size);
                 } else {
@@ -87,7 +87,7 @@ function loop_over_layers(_svg, _instructions) {
 
                 // // color
                 if (var_bindings.includes('color')) {
-                    geomLines.attr('stroke', d => scales.color(accessors.color(d[0])));
+                    geomLines.attr('stroke', d => scalesAndTypes.color.scale(accessors.color(d[0])));
                 } else if (var_attributes.includes('color')) {
                     geomLines.attr('stroke', attributes.color);
                 } else {
@@ -96,6 +96,58 @@ function loop_over_layers(_svg, _instructions) {
 
                 break;
 
+            //////// Bars //////////
+            case "bar":
+                const groupedBarData = d3.group(_instructions.data, d => {
+                    const groupKey = var_groupies.map(key => accessors[key](d));
+                    return groupKey.join('|');
+                });
+
+                const barGroups = _svg.append('g')
+                    .selectAll('.bar-group')
+                    .data(groupedBarData)
+                    .join('g')
+                    .attr('class', 'bar-group');
+
+                barGroups.selectAll('.bar')
+                    .data(d => d[1])
+                    .join('rect')
+                    .attr('x', d => scalesAndTypes.x.scale(accessors.x(d))) 
+                    .attr('y', d => scalesAndTypes.y.scale(accessors.y(d)))
+                    .attr('width', scalesAndTypes.x.scale.bandwidth())
+                    .attr('height', d => {
+                        const yValue = accessors.y(d);
+                        return _instructions.dimensions.ctrHeight - scalesAndTypes.y.scale(yValue);
+                    })
+                    .attr('fill', d => {
+                        if (var_bindings.includes('color')) {
+                            return scalesAndTypes.color.scale(accessors.color(d));
+                        } else if (var_attributes.includes('color')) {
+                            return attributes.color;
+                        } else {
+                            return 'blue'; // Default fill color for bars
+                        }
+                    })
+                    .attr('stroke', d => {
+                        if (var_bindings.includes('stroke')) {
+                            return scalesAndTypes.stroke.scale(accessors.stroke(d));
+                        } else if (var_attributes.includes('stroke')) {
+                            return attributes.stroke;
+                        } else {
+                            return 'none'; // Default stroke for bars
+                        }
+                    })
+                    .attr('stroke-width', d => {
+                        if (var_bindings.includes('size')) {
+                            return scalesAndTypes.size.scale(accessors.size(d));
+                        } else if (var_attributes.includes('size')) {
+                            return attributes.size;
+                        } else {
+                            return 1;
+                        }
+                    })
+                    .attr('opacity', 0.5);
+                break;
             
             //////// Texts //////////
             case "text":
@@ -112,15 +164,13 @@ function loop_over_layers(_svg, _instructions) {
                     .selectAll('text')
                     .data(d => d[1])
                     .join('text')
-                    .attr('x', d => scales.x(accessors.x(d)))
-                    .attr('y', d => scales.y(accessors.y(d)))
+                    .attr('x', d => scalesAndTypes.x.scale(accessors.x(d)))
+                    .attr('y', d => scalesAndTypes.y.scale(accessors.y(d)))
                     .text(d => accessors.text(d));
                 
                 // size
                 if (var_bindings.includes('size')) {
-                    console.log('vaaaaa');
-                    // textElements.attr('font-size', d => Math.pow(scales.size(accessors.size(d)), 0.2)*5);
-                    textElements.attr('font-size', d => Math.pow(scales.size(accessors.size(d)), 0.2)*7);
+                    textElements.attr('font-size', d => Math.pow(scalesAndTypes.size.scale(accessors.size(d)), 0.2)*7);
                 } else if (var_attributes.includes('size')) {
                     textElements.attr('font-size', attributes.size);
                 } else {
@@ -128,11 +178,9 @@ function loop_over_layers(_svg, _instructions) {
                 }            
 
                 // color
-                console.log('this', var_attributes);
                 if (var_bindings.includes('color')) {
-                    textElements.attr('fill', d => scales.color(accessors.color(d)));
+                    textElements.attr('fill', d => scalesAndTypes.color.scale(accessors.color(d)));
                 } else if (var_attributes.includes('color')) {
-                    // textElements.attr('fill', var_attributes.color)
                     textElements.attr('fill', attributes.color)
                 } else {
                     textElements.attr('fill', 'black');
@@ -144,55 +192,3 @@ function loop_over_layers(_svg, _instructions) {
     }
     return _svg;
 }
-
-
-
-
-
-
-
-function add_text(_svg, _instructions, _xscale, _yscale, _colorscale, _sizescale, _attributes) {
-
-        // Remove bindings if there is an equivalent attribute, which is dominant by default
-        function removeProperties(obj, propsToRemove) {
-            for (let prop of propsToRemove) {
-                if (obj.hasOwnProperty(prop)) {
-                    delete obj[prop];
-                }
-            }
-        }
-        let bindings = Object.assign({}, _instructions['bindings']);
-        removeProperties(bindings, Object.keys(_attributes));
-
-        
-    // Compulsory bindings
-    let geomText = _svg.append('g').selectAll('text')
-        .data(_instructions['data'])
-        .join('text')
-        .attr('x', d => _xscale(d[bindings['x']]))
-        .attr('y', d => _yscale(d[bindings['y']])-15)
-        .attr('text-anchor', "middle")
-        .text(d => d[bindings['text']])
-
-    // Binding attributes
-    if(Object.hasOwn(bindings, "color")) {
-        geomText.attr('fill', d => _colorscale(d[bindings['color']]));
-    }
-    
-    if(Object.hasOwn(bindings, "size")) {
-        geomText.attr('font-size', d => Math.pow(_sizescale(d[bindings['size']]), 0.2)*5);
-    }
-
-    // Set attributes
-    for (let _attr in _attributes) {
-        if (_attr == "color") {
-            geomText.attr("color", _attributes[_attr])
-        }
-        if (_attr === "size") {
-            geomText.attr("font-size", _attributes[_attr])
-        }
-        };
-        
-    return(_svg)
-    
-        }

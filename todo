@@ -1,2 +1,6 @@
-- only long format
+- override bindings for specific layer
+- Fix scaling with axis etc
+- dependant bindings - another layer is leading the way
+- dodge labeling
 - facets
+- legends

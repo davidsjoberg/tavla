@@ -1,7 +1,7 @@
 import { dirigent } from "./dirigent.js";
 
 // Create a dataset with randomized data
-const data = Array.from({length: 20}, (_, i) => ({
+const data = Array.from({length: 100}, (_, i) => ({
   id: i,
   score: Math.random(),
   hej: Math.random(),
@@ -16,6 +16,10 @@ const instructions1 = {data :      data,
                                     color : "category",
                                     text : "category"
                                    }, 
+                      labels : {
+                          x : "id",
+                          y : "score"
+                      },
                       
                       layers :   {
 
@@ -23,15 +27,17 @@ const instructions1 = {data :      data,
                                           {
                                           geometry : "line",
                                           attributes : {
-                                            size: 2,
+                                            // size: 2,
                                             // color: "black"
                                                         }
                                           },
                         layer2 :  
                                           {
                                           geometry : "point",
+                                          bindings : {
+                                            size : "id"
+                                          },
                                           attributes : {
-                                          size: 5,
                                           stroke: "black"
                                                         }
                                           },
@@ -39,110 +45,57 @@ const instructions1 = {data :      data,
                                           {
                                           geometry : "text",
                                           attributes : {
-                                            // color: 'blue'
+                                            size: 16
                                                         }
                                           },
                                    }
                       };
+
+
 const instructions2 = {data :      data,
                       bindings : {
                                     x : "id", 
                                     y : "score",
-                                    size : "score",
-                                    color : "category",
-                                    text : "category"
-                                  //   stroke: "category"
+                                    size : 'score',
+                                    color : 'category'
                                    }, 
                       
                       layers :   {
-
                         layer1 :  
                                           {
                                           geometry : "line",
                                           attributes : {
-                                          size: 2,
-                                          color: "blue"
-                                                        }
+                                            stroke : 'black',
+                                            color : 'blue'
                                           }
-                        // layer2 :  
-                        //                   {
-                        //                   geometry : "point",
-                        //                   attributes : {
-                        //                     // size: 2,
-                        //                     // color: "blue"
-                        //                                 }
-                        //                   }
-                                   }
-                      };
+                                          }
+                                   }};
 
-// const instructions2 = {data :      data,
-//                       bindings : {
-//                                     x : "id", 
-//                                     y : "score",
-//                                     size : "score",
-//                                     color : "category",
-//                                     text : "category"
-//                                   //   stroke: "category"
-//                                    }, 
-                      
-//                       layers :   {
 
-//                         layer1 :  
-//                                           {
-//                                           geometry : "line",
-//                                           attributes : {
-//                                           size: 2,
-//                                             // color: "blue"
-//                                                         }
-//                                           },
-//                         layer2 :  
-//                                           {
-//                                           geometry : "point",
-//                                           attributes : {
-//                                             // size: 2,
-//                                             // color: "blue"
-//                                                         }
-//                                           }
-//                                    }
-//                       };
 
 const instructions3 = {data :      data,
                       bindings : {
-                                    x : "id", 
+                                    x : "category", 
                                     y : "score",
-                                    size : "score",
-                                    color : "category",
-                                    text : "category"
-                                  //   stroke: "category"
+                                    color : "id"
                                    }, 
                       
                       layers :   {
-
                         layer1 :  
                                           {
-                                          geometry : "line",
+                                          geometry : "bar",
                                           attributes : {
-                                            size: 2,
-                                            stroke: "black"
-                                                        }
-                                          },
-                        layer2 :  
-                                          {
-                                          geometry : "point",
-                                          attributes : {
-                                            // size: 2,
-                                            // color: "blue"
-                                                        }
+                                            stroke : "black",
+                                            size : 2
                                           }
-                                   }
-                      };
+                                          }
+                                   }};
 
 
-const plot1 = dirigent("#viz1", instructions1, 800, "plot1")
-// const plot2 = dirigent("#viz2", instructions2, 400, "plot2")
-// const plot3 = dirigent("#viz3", instructions3, 400, "plot3")
 
-// rita(data, x = "year", y = "profit", text = "Company")
+const plot1 = dirigent("#viz1", instructions1, 700, "plot1")
+const plot2 = dirigent("#viz2", instructions2, 400, "plot2")
+const plot3 = dirigent("#viz3", instructions3, 400, "plot3")
+
+// rita(data, x = "year", y = "profit", color = "Company")
 //   .points(fill = "blue")
-//   .text()
-//   .theme("basic")

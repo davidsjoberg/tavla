@@ -50,22 +50,15 @@ function prepare_extended_instructions(_instructions) {
 
         // Layer bindints should be overrided if layer specified
         let layer_bindings_and_cols = { ..._instructions.bindings }; // Shallow copy of _instructions.bindings
-        if (layer.bindings) {
+        if (_instructions.layers[layer].bindings) {
             const updated_bindings = Object.keys(_instructions.layers[layer].bindings);
-
+            console.log('before', updated_bindings);
             updated_bindings.forEach(key => {
-                // Check if the key exists in _instructions.bindings
-                if (layer_bindings_and_cols.hasOwnProperty(key)) {
-                    // Replace the value in _instructions.bindings with the value from layer.bindings
-                    layer_bindings_and_cols[key] = layer.bindings[key];
-                } else {
-                    // If the key does not exist, add it to layer_bindings_and_cols
-                    layer_bindings_and_cols[key] = layer.bindings[key];
-                }
-            });
-}
+                    layer_bindings_and_cols[key] = _instructions.layers[layer].bindings[key];
+                })
+                console.log('updated', layer_bindings_and_cols);
+            };
         let declared_bindings = Object.keys(layer_bindings_and_cols)
-        console.log(layer_bindings_and_cols);
 
         const { required_bindings, accepted_bindings, grouping_bindings } = binding_rules[layertype];
 

@@ -5,8 +5,6 @@ import * as geoms from './helpers/geoms.js';
 import * as panel from './helpers/panel.js';
 import * as preps from './helpers/preps.js';
 
-
-
 function dirigent(_div, _instructions, _plot_width, _plotId) {
   _instructions.dimensions = panel.panel_dimensions(_plot_width);
 

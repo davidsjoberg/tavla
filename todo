@@ -1,6 +1,7 @@
-- override bindings for specific layer
 - Fix scaling with axis etc
+- Fix scaling with dots size
 - dependant bindings - another layer is leading the way
 - dodge labeling
 - facets
 - legends
+- stacked bars and dodged bars

@@ -15,8 +15,12 @@ function dirigent(_div, _instructions, _plot_width, _plotId) {
     .attr("width", _instructions.dimensions.width)
     .attr("height", _instructions.dimensions.height);
 
+  // Prepare data transformation
+  let extended_instructions = preps.transform_data(_instructions);
+  console.log('insts', extended_instructions);
+
   // Prepare scales
-  let extended_instructions = scales.make_scales_to_bindings(_instructions);
+  extended_instructions = scales.make_scales_to_bindings(extended_instructions);
 
   // Prepare extended instruction for each layer
   extended_instructions = preps.prepare_extended_instructions(extended_instructions);

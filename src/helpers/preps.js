@@ -1,5 +1,42 @@
-export {prepare_extended_instructions};
-    
+export {prepare_extended_instructions, transform_data};
+
+function transform_data(_instructions) {
+    for (const layer in _instructions.layers) {
+
+        /////////// LAYER PARAMS /////////////
+        const layertype = _instructions.layers[layer].geometry;
+
+        let layerkind;
+        if (_instructions.layers[layer].attributes && _instructions.layers[layer].attributes.kind) {
+            layerkind = _instructions.layers[layer].attributes.kind;
+        }
+
+        switch (layertype){
+        case 'bar':
+            switch(layerkind) {
+                case 'dodge':
+                case 'stack':
+                    const transformedData = _instructions.data.map(d => {
+                        const stackData = [];
+                        Object.keys(d).forEach(key => {
+                            if (key !== 'group') {
+                                stackData.push({ category: key, value: d[key] });
+                            }
+                        });
+                        return {
+                            group: d.group,
+                            values: stackData
+                        };
+                    });
+                    _instructions.layers[layer].transformed_data = transformedData;
+                default:
+                    
+            }
+        }
+    }
+    return _instructions;
+}
+
 function prepare_extended_instructions(_instructions) {
     // This function prepares everything that each layer need to know except data
 

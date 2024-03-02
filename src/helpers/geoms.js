@@ -3,14 +3,21 @@ export{loop_over_layers};
 function loop_over_layers(_svg, _instructions) {
     const { scalesAndTypes } = _instructions;
     for (let layer in _instructions.layers) {
-        const { geometry, accessors, delegations, attributes } = _instructions.layers[layer];
+        const { geometry, accessors, delegations, attributes, transformed_data } = _instructions.layers[layer];
         const { var_bindings, var_attributes, var_groupies } = delegations;
-        
+        let layer_data;
+
+        if (transformed_data) {
+            layer_data = transformed_data;
+        } else {
+            layer_data = _instructions.data;
+        }
+
         switch (geometry) {
 
             //////// POINTS //////////
             case "point":
-                const groupedPointData = d3.group(_instructions.data, d => {
+                const groupedPointData = d3.group(layer_data, d => {
                     const groupKey = var_groupies.map(key => accessors[key](d));
                     return groupKey.join('|'); 
                 });
@@ -57,7 +64,7 @@ function loop_over_layers(_svg, _instructions) {
             
             //////// LINES //////////
             case "line":
-                const groupedLineData = d3.group(_instructions.data, d => {
+                const groupedLineData = d3.group(layer_data, d => {
                     const groupKey = var_groupies.map(key => accessors[key](d));
                     return groupKey.join('|'); // Use a separator to create a unique key
                 });
@@ -148,10 +155,12 @@ function loop_over_layers(_svg, _instructions) {
                     })
                     .attr('opacity', 0.5);
                 break;
+                
+                
             
             //////// Texts //////////
             case "text":
-                const groupedTextData = d3.group(_instructions.data, d => {
+                const groupedTextData = d3.group(layer_data, d => {
                     const groupKey = var_groupies.map(key => accessors[key](d));
                     return groupKey.join('|');
                 });

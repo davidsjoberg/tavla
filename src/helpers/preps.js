@@ -27,18 +27,17 @@ function transform_data(_instructions) {
                             group: d.group,
                             values: stackData
                         };
-                    });
-                    _instructions.layers[layer].transformed_data = transformedData;
-                default:
+                    ByteLengthQueuingStrategy
                     
-            }
-        }
-    }
-    return _instructions;
-}
-
-function prepare_extended_instructions(_instructions) {
-    // This function prepares everything that each layer need to know except data
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    2layer need to know except data
 
     // Support funs
     function createAccessor(value) {

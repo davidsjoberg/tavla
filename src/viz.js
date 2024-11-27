@@ -1,7 +1,7 @@
 import { dirigent } from "./dirigent.js";
 
 // Create a dataset with randomized data
-const data = Array.from({length: 10}, (_, i) => ({
+const data = Array.from({length: 30}, (_, i) => ({
   id: i,
   score: Math.random(),
   hej: Math.random(),
@@ -27,8 +27,8 @@ const instructions1 = {data :      data,
                                           {
                                           geometry : "line",
                                           attributes : {
-                                            // size: 2,
-                                            // color: "black"
+                                            size: 2,
+                                            color: "black"
                                                         }
                                           },
                         layer2 :  
@@ -45,7 +45,7 @@ const instructions1 = {data :      data,
                                           {
                                           geometry : "text",
                                           attributes : {
-                                            size: 16,
+                                            size: 12,
                                             color : 'black'
                                                         }
                                           },
@@ -66,8 +66,7 @@ const instructions2 = {data :      data,
                                           {
                                           geometry : "line",
                                           attributes : {
-                                            stroke : 'black',
-                                            color : 'blue'
+                                            stroke : 'black'
                                           }
                                           }
                                    }};
@@ -77,7 +76,8 @@ const instructions2 = {data :      data,
 const instructions3 = {data :      data,
                       bindings : {
                                     x : "category", 
-                                    y : "score"
+                                    y : "score",
+                                    color : "id"
                                    }, 
                       
                       layers :   {

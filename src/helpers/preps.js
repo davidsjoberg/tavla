@@ -1,4 +1,34 @@
-export {prepare_extended_instructions, transform_data};
+export {prepare_extended_instructions, transform_data, get_geometries};
+import * as sup from './support_funs.js';
+
+function get_geometries(_instructions, _geometry_database) {
+    // Create a set to store unique geometries
+    const geometries = new Set();
+
+    // Iterate over the layers object
+    for (const layer in _instructions.layers) {
+        if (_instructions.layers[layer].geometry) {
+            geometries.add(_instructions.layers[layer].geometry);
+        }
+    }
+
+    // Helper function to filter geometry database
+    function filterGeoms(database, keys) {
+        return Object.fromEntries(
+            Object.entries(database).filter(([key]) => keys.has(key)) // Use Set's `has` method
+        );
+    }
+
+    // Filter the geometry database
+    const filteredGeomDatabase = filterGeoms(_geometry_database, geometries);
+
+    // Add the filtered geometry database to the instructions
+    _instructions.geoms = filteredGeomDatabase;
+
+    // Return the modified instructions
+    return _instructions;
+}
+
 
 function transform_data(_instructions) {
     for (const layer in _instructions.layers) {
@@ -27,17 +57,19 @@ function transform_data(_instructions) {
                             group: d.group,
                             values: stackData
                         };
-                    ByteLengthQueuingStrategy
+                    });
+                    _instructions.layers[layer].transformed_data = transformedData;
+                default:
                     
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    
-                    2layer need to know except data
+            }
+        }
+    }
+    return _instructions;
+}
+
+                        
+function prepare_extended_instructions(_instructions) {
+    // This function prepares everything that each layer need to know except data
 
     // Support funs
     function createAccessor(value) {
@@ -47,28 +79,7 @@ function transform_data(_instructions) {
     }
 
     // Geometry rules of geometry delegation
-    const binding_rules = {
-        point: {
-            required_bindings: ['x', 'y'],
-            accepted_bindings: ['x', 'y', 'color', 'size', 'stroke'],
-            grouping_bindings: ['color', 'size', 'stroke']
-        },
-        line: {
-            required_bindings: ['x', 'y'],
-            accepted_bindings: ['x', 'y', 'color'],
-            grouping_bindings: ['color']
-        },
-        bar: {
-            required_bindings: ['x', 'y'],
-            accepted_bindings: ['x', 'y', 'color'],
-            grouping_bindings: []
-        },
-        text: {
-            required_bindings: ['x', 'y', 'text'],
-            accepted_bindings: ['x', 'y', 'text', 'color', 'size'],
-            grouping_bindings: ['color', 'size']
-        },
-    };
+    const binding_rules = sup.extractBindingRules(_instructions)
 
     // Create layer instructions
     for (const layer in _instructions.layers) {
@@ -88,11 +99,9 @@ function transform_data(_instructions) {
         let layer_bindings_and_cols = { ..._instructions.bindings }; // Shallow copy of _instructions.bindings
         if (_instructions.layers[layer].bindings) {
             const updated_bindings = Object.keys(_instructions.layers[layer].bindings);
-            console.log('before', updated_bindings);
             updated_bindings.forEach(key => {
                     layer_bindings_and_cols[key] = _instructions.layers[layer].bindings[key];
                 })
-                console.log('updated', layer_bindings_and_cols);
             };
         let declared_bindings = Object.keys(layer_bindings_and_cols)
 
@@ -168,3 +177,5 @@ function transform_data(_instructions) {
 
     return _instructions;
 }
+
+

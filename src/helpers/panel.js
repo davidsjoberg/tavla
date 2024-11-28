@@ -23,7 +23,7 @@ function panel_dimensions(_plot_width) {
     // Dimensions
     let dimensions = {
       width: _plot_width,
-      height: _plot_width / 1.4,
+      height: _plot_width / 1.6,
       marginTop: _plot_width / 60,
       marginRight: _plot_width / 10,
       marginBottom: _plot_width / 10,

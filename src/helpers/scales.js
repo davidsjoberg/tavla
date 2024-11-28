@@ -59,7 +59,7 @@ function make_scales_to_bindings(_instructions) {
           case "number":
             scaleObject.scale = d3.scaleLinear()
               .domain(d3.extent(data, d => d[value]))
-              .range([10, 400]);
+              .range([5, 5000]);
             scaleObject.type = "number";
             break;
           default:
@@ -67,16 +67,17 @@ function make_scales_to_bindings(_instructions) {
         }
         break;
 
-      case "text":
-        switch (dtype) {
-          case "string":
-            scaleObject.scale = d => d;
-            scaleObject.type = "discrete";
-            break;
-          default:
-            throw new Error(`Sorry, ${dtype} is not a supported data type for binding ${key}.`);
-        }
-        break;
+        case "text":
+          switch (dtype) {
+              case "string":
+              case "number":
+                  scaleObject.scale = d => d[value].toString();
+                  scaleObject.type = "discrete";
+                  break;
+              default:
+                  throw new Error(`Sorry, ${dtype} is not a supported data type for binding ${key}.`);
+          }
+          break;
     }
 
     scalesAndTypes[key] = scaleObject;

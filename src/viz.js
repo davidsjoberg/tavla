@@ -1,7 +1,7 @@
 import { dirigent } from "./dirigent.js";
 
 // Updated scatter plot data
-const scatterData = Array.from({ length: 20 }, (_, i) => ({
+const scatterData = Array.from({ length: 25 }, (_, i) => ({
   id: i + 1,
   year: 2000 + i,
   profit: Math.random() * 100000, // Profit between 0 and 100,000
@@ -11,13 +11,13 @@ const scatterData = Array.from({ length: 20 }, (_, i) => ({
 
 // Updated line chart data with groups
 const lineData = [];
-const startYear = 2000;
+const startYear = 2015;
 const endYear = 2020;
 const numYears = endYear - startYear + 1;
 const products = ['Product A', 'Product B', 'Product C']; // Three products
 
 products.forEach(product => {
-  let sales = 100 + Math.random() * 20; // Starting sales value with slight variation
+  let sales = 100 + Math.random() * 10; // Starting sales value with slight variation
   for (let i = 0; i < numYears; i++) {
     // Simulate a yearly growth rate and add random noise
     const growthRate = 0.05; // 5% annual growth
@@ -55,7 +55,7 @@ const instructionsScatter = {
         stroke: "black"
       },
     },
-    layer12: {
+    layer2: {
       geometry: "text",
       attributes: {
         color: "black",
@@ -82,10 +82,11 @@ const instructionsLine = {
     layer1: {
       geometry: "line",
       attributes: {
-        stroke: "black"
+        stroke: "black",
+        size: 10
       }
     },
-    layer12: {
+    layer2: {
       geometry: "text",
       attributes: {
         color: "black",

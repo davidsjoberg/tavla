@@ -38,7 +38,9 @@ function dirigent(_div, _instructions, _plot_width, _plotId) {
   svg = axis.plot_axis(svg,extended_instructions);
 
   // Plot layers
-  svg = render.loop_over_layers(svg, extended_instructions);
+  svg = render.render_layer(svg, extended_instructions);
+  console.log('Extended instructions', extended_instructions)
+  
 
   return svg.node();
 }

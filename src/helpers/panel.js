@@ -1,4 +1,4 @@
-export{plot_panel}
+export{plot_panel, render_titles, measureTitleHeight}
 export {small_grid};
 export {panel_dimensions};
 
@@ -19,22 +19,137 @@ function small_grid(A, domain) {
     return middle_pos
     }
 
-function panel_dimensions(_plot_width) {
+/**
+ * Creates a temporary rendering to measure the actual height needed for titles
+ */
+function measureTitleHeight(_instructions, _plot_width) {
+    if (!_instructions.labels || (!_instructions.labels.title && !_instructions.labels.subtitle)) {
+        return 0; // No titles to measure
+    }
+    
+    // Create a temporary SVG to measure text dimensions
+    const tempSvg = d3.create('svg')
+        .style('position', 'absolute')
+        .style('visibility', 'hidden')
+        .style('pointer-events', 'none')
+        .attr('width', _plot_width)
+        .attr('height', 100); // Arbitrary height
+    
+    document.body.appendChild(tempSvg.node());
+    
+    const titleGroup = tempSvg.append("g")
+        .attr("class", "chart-titles")
+        .attr("transform", `translate(10, 10)`); // Some padding
+    
+    let totalHeight = 0;
+    const titlePadding = 5; // Padding between title/subtitle and below subtitle
+    
+    // Add title if it exists
+    if (_instructions.labels.title) {
+        const titleText = titleGroup.append("text")
+            .attr("class", "chart-title")
+            .attr("x", 0)
+            .attr("y", 0)
+            .attr("font-size", "18px")
+            .attr("font-weight", "bold")
+            .text(_instructions.labels.title);
+        
+        const titleBBox = titleText.node().getBBox();
+        totalHeight = titleBBox.height + titlePadding;
+    }
+    
+    // Add subtitle if it exists
+    if (_instructions.labels.subtitle) {
+        const subtitleText = titleGroup.append("text")
+            .attr("class", "chart-subtitle")
+            .attr("x", 0)
+            .attr("y", totalHeight)
+            .attr("font-size", "14px")
+            .text(_instructions.labels.subtitle);
+        
+        const subtitleBBox = subtitleText.node().getBBox();
+        totalHeight += subtitleBBox.height + titlePadding;
+    }
+    
+    // Remove the temporary SVG
+    tempSvg.remove();
+    
+    // Add some extra padding and return
+    return totalHeight + 10; // Extra padding at the bottom
+}
+
+function panel_dimensions(_plot_width, _instructions) {
+    // Calculate title space based on actual rendered titles
+    const titleHeight = _instructions ? measureTitleHeight(_instructions, _plot_width) : 0;
+    
+    // Use consistent margins with dynamically calculated title space
+    const margins = {
+        top: _plot_width * 0.02 + titleHeight, // Add measured titleHeight to top margin
+        right: _plot_width * 0.06,    // 6% of width
+        bottom: _plot_width * 0.08,   // 8% of width
+        left: _plot_width * 0.08      // 8% of width
+    };
+    
     // Dimensions
     let dimensions = {
-      width: _plot_width,
-      height: _plot_width / 1.6,
-      marginTop: _plot_width / 60,
-      marginRight: _plot_width / 10,
-      marginBottom: _plot_width / 10,
-      marginLeft: _plot_width / 12
-  };
-    dimensions.ctrWidth = dimensions.width - dimensions.marginLeft - dimensions.marginRight
-    dimensions.ctrHeight = dimensions.height - dimensions.marginTop - dimensions.marginBottom
+        width: _plot_width,
+        height: _plot_width / 1.6 + titleHeight, // Add titleHeight to overall height
+        marginTop: margins.top,
+        marginRight: margins.right,
+        marginBottom: margins.bottom,
+        marginLeft: margins.left,
+        titleHeight: titleHeight    // Store title height for positioning
+    };
+    
+    dimensions.ctrWidth = dimensions.width - dimensions.marginLeft - dimensions.marginRight;
+    dimensions.ctrHeight = dimensions.height - dimensions.marginTop - dimensions.marginBottom;
 
-    return dimensions
+    return dimensions;
 }
-  
+
+function render_titles(_svg, _instructions) {
+    const { labels, dimensions } = _instructions;
+    
+    if (!labels) return _svg;
+    
+    // Create a title container at the top of the chart
+    const titleGroup = _svg.append("g")
+        .attr("class", "chart-titles")
+        .attr("transform", `translate(${dimensions.marginLeft}, ${dimensions.marginTop * 0.25})`);
+    
+    let currentY = 0;
+    const titlePadding = 5;
+    
+    // Add title if it exists
+    if (labels.title) {
+        titleGroup.append("text")
+            .attr("class", "chart-title")
+            .attr("x", 0)
+            .attr("y", currentY)
+            .attr("dy", "1em") // Align with top of text, not baseline
+            .attr("font-size", "18px")
+            .attr("font-weight", "bold")
+            .attr("fill", "#333333")
+            .text(labels.title);
+        
+        currentY += 24; // Approximate height of title + padding
+    }
+    
+    // Add subtitle if it exists
+    if (labels.subtitle) {
+        titleGroup.append("text")
+            .attr("class", "chart-subtitle")
+            .attr("x", 0)
+            .attr("y", currentY)
+            .attr("dy", "1em") // Align with top of text, not baseline
+            .attr("font-size", "14px")
+            .attr("font-weight", "normal")
+            .attr("fill", "#666666")
+            .text(labels.subtitle);
+    }
+    
+    return _svg;
+}
 
 function plot_panel(_svg, _instructions) {
 
@@ -45,16 +160,17 @@ function plot_panel(_svg, _instructions) {
           `translate(${_instructions.dimensions.marginLeft}, ${_instructions.dimensions.marginTop})`,
       );
 
+  // Revert back to light gray for plot area
   _svg.append("rect")
       .attr("width", _instructions.dimensions.ctrWidth)
       .attr("height", _instructions.dimensions.ctrHeight)
-      .attr("fill", "#ebebeb");
+      .attr("fill", "#ebebeb"); // Reverted back to light gray
 
   ///////// X GRID //////////
   switch(_instructions.scalesAndTypes.x.type) {
     case 'number':
       const xGrid = (g) => g
-        .style('stroke', 'white')
+        .style('stroke', 'white') // Back to white grid lines on gray background
         .style('stroke-width', 1.5)
         .selectAll('line')
         .data(_instructions.scalesAndTypes.x.scale.ticks(5))
@@ -65,7 +181,7 @@ function plot_panel(_svg, _instructions) {
         .attr('y2', _instructions.dimensions.ctrHeight);
 
       const xGridMinor = (g) => g
-        .style('stroke', 'white')
+        .style('stroke', 'white') // Back to white minor grid lines
         .style('stroke-width', .5)
         .selectAll('line')
         .data(small_grid(_instructions.scalesAndTypes.x.scale.ticks(5), _instructions.scalesAndTypes.x.scale.domain()))
@@ -87,7 +203,7 @@ function plot_panel(_svg, _instructions) {
   switch(_instructions.scalesAndTypes.y.type) {
     case 'number':
       const yGrid = (g) => g
-        .style('stroke', 'white')
+        .style('stroke', 'white') // Back to white grid lines
         .style('stroke-width', 1.5)
         .selectAll('line')
         .data(_instructions.scalesAndTypes.y.scale.ticks(4))
@@ -98,7 +214,7 @@ function plot_panel(_svg, _instructions) {
         .attr('x2', _instructions.dimensions.ctrWidth);
 
       const yGridMinor = (g) => g
-        .style('stroke', 'white')
+        .style('stroke', 'white') // Back to white minor grid lines
         .style('stroke-width', 0.5)
         .selectAll('line')
         .data(small_grid(_instructions.scalesAndTypes.y.scale.ticks(4), _instructions.scalesAndTypes.y.scale.domain()))
@@ -116,8 +232,5 @@ function plot_panel(_svg, _instructions) {
 
   }
   
-
-
-
   return _svg;
 }

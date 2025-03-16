@@ -1,4 +1,4 @@
-export {prepare_extended_instructions, transform_data, get_geometries};
+export {prepare_extended_instructions, transform_data, get_geometries, extractRenderFunctions};
 import * as sup from './support_funs.js';
 
 function get_geometries(_instructions, _geometry_database) {
@@ -31,39 +31,28 @@ function get_geometries(_instructions, _geometry_database) {
 
 
 function transform_data(_instructions) {
+    // Iterate through layers and apply geometry-specific data transformations
     for (const layer in _instructions.layers) {
-
-        /////////// LAYER PARAMS /////////////
-        const layertype = _instructions.layers[layer].geometry;
-
-        let layerkind;
-        if (_instructions.layers[layer].attributes && _instructions.layers[layer].attributes.kind) {
-            layerkind = _instructions.layers[layer].attributes.kind;
-        }
-
-        switch (layertype){
-        case 'bar':
-            switch(layerkind) {
-                case 'dodge':
-                case 'stack':
-                    const transformedData = _instructions.data.map(d => {
-                        const stackData = [];
-                        Object.keys(d).forEach(key => {
-                            if (key !== 'group') {
-                                stackData.push({ category: key, value: d[key] });
-                            }
-                        });
-                        return {
-                            group: d.group,
-                            values: stackData
-                        };
-                    });
+        const layerInfo = _instructions.layers[layer];
+        const geometryType = layerInfo.geometry;
+        
+        // Get the geometry from _instructions.geoms
+        if (_instructions.geoms && _instructions.geoms[geometryType]) {
+            const geometry = _instructions.geoms[geometryType];
+            
+            // If the geometry has a data_transform function, use it
+            if (geometry.data_transform && typeof geometry.data_transform === 'function') {
+                // Call the geometry-specific data transformation function
+                const transformedData = geometry.data_transform(_instructions.data, layerInfo);
+                
+                // If transformation returns data, store it in the layer
+                if (transformedData) {
                     _instructions.layers[layer].transformed_data = transformedData;
-                default:
-                    
+                }
             }
         }
     }
+    
     return _instructions;
 }
 
@@ -173,6 +162,11 @@ function prepare_extended_instructions(_instructions) {
     }
 
     return _instructions;
+}
+
+// Add this new function to re-export from support_funs
+function extractRenderFunctions(_instructions) {
+    return sup.extractRenderFunctions(_instructions);
 }
 
 

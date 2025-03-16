@@ -2,13 +2,141 @@
 <html>
 <head>
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        /* Set black background for the entire page */
+        body {
+            background-color: black;
+            color: white;
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        
+        /* Main container styles */
+        .section {
+            margin-bottom: 30px;
+        }
+        
+        h1, h2 {
+            color: #ffffff;
+            margin-bottom: 15px;
+        }
+        
+        /* Example container styles - more compact */
+        .example-row {
+            display: flex;
+            margin-bottom: 15px;
+            align-items: flex-start;
+        }
+        
+        /* Visualization container */
+        .viz-container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 5px;
+            width: 700px;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+        }
+        
+        /* Code display container - updated for description text */
+        .code-container {
+            background-color: #333;
+            border-radius: 8px;
+            padding: 15px;
+            margin-left: 20px;
+            width: 300px;
+            font-family: sans-serif;
+            font-size: 13px;
+            line-height: 1.4;
+            color: #f0f0f0;
+            white-space: pre-wrap;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.05);
+        }
+        
+        /* Highlight layer names */
+        .layer-name {
+            color: #64b5f6;
+            font-weight: bold;
+        }
+
+        /* Axis styles */
+        .domain, .tick line {
+            stroke: black;
+            stroke-width: 1px;
+        }
+        
+        .tick text {
+            fill: black;
+            font-weight: normal;
+            font-size: 11px;
+        }
+    </style>
 </head>
 <body>
-    <h1>Hej</h1>
-    <div id="viz1"></div><br>
-    <div id="viz2"></div><br>
-    <div id="viz3"></div><br>
-    <div id="viz4"></div>
+    <h1>Tavla Visualization Gallery</h1>
+    
+    <!-- Scatter Plot Section -->
+    <div class="section" id="scatter-section">
+        <h2>Scatter Plots</h2>
+        <div class="example-row">
+            <div class="viz-container" id="scatter1"></div>
+            <pre class="code-container" id="scatter1-code"></pre>
+        </div>
+        <div class="example-row">
+            <div class="viz-container" id="scatter2"></div>
+            <pre class="code-container" id="scatter2-code"></pre>
+        </div>
+        <div class="example-row">
+            <div class="viz-container" id="scatter3"></div>
+            <pre class="code-container" id="scatter3-code"></pre>
+        </div>
+        <div class="example-row">
+            <div class="viz-container" id="scatter4"></div>
+            <pre class="code-container" id="scatter4-code"></pre>
+        </div>
+    </div>
+    
+    <!-- Line Chart Section -->
+    <div class="section" id="line-section">
+        <h2>Line Charts</h2>
+        <div class="example-row">
+            <div class="viz-container" id="line1"></div>
+            <pre class="code-container" id="line1-code"></pre>
+        </div>
+        <div class="example-row">
+            <div class="viz-container" id="line2"></div>
+            <pre class="code-container" id="line2-code"></pre>
+        </div>
+        <div class="example-row">
+            <div class="viz-container" id="line3"></div>
+            <pre class="code-container" id="line3-code"></pre>
+        </div>
+        <div class="example-row">
+            <div class="viz-container" id="line4"></div>
+            <pre class="code-container" id="line4-code"></pre>
+        </div>
+    </div>
+    
+    <!-- Bar Chart Section -->
+    <div class="section" id="bar-section">
+        <h2>Bar Charts</h2>
+        <div class="example-row">
+            <div class="viz-container" id="bar1"></div>
+            <pre class="code-container" id="bar1-code"></pre>
+        </div>
+        <div class="example-row">
+            <div class="viz-container" id="bar2"></div>
+            <pre class="code-container" id="bar2-code"></pre>
+        </div>
+        <div class="example-row">
+            <div class="viz-container" id="bar3"></div>
+            <pre class="code-container" id="bar3-code"></pre>
+        </div>
+        <div class="example-row">
+            <div class="viz-container" id="bar4"></div>
+            <pre class="code-container" id="bar4-code"></pre>
+        </div>
+    </div>
+    
     <script type="module" src="src/viz.js"></script>
 </body>
 </html>

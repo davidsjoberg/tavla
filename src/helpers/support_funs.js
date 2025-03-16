@@ -75,31 +75,22 @@ export function getPointsAlongPaths(_svg, layerId, numPoints = 10) {
                 });
             }
 
-            // Generate points along the "top and bottom boundaries" of the stroke width
+            // Generate points along the path
             const points = [];
             for (let i = 0; i < numPoints; i++) {
                 const point = path.getPointAtLength(i * interval);
-
-                // Compute perpendicular offset for the stroke-width boundaries
-                const tangentAngle = path.getTotalLength() === 0 ? 0 : Math.atan2(
-                    path.getPointAtLength((i + 1) * interval % pathLength).y - point.y,
-                    path.getPointAtLength((i + 1) * interval % pathLength).x - point.x
-                );
-                const dx = (strokeWidth / 2) * Math.cos(tangentAngle + Math.PI / 2); // Perpendicular X offset
-                const dy = (strokeWidth / 2) * Math.sin(tangentAngle + Math.PI / 2); // Perpendicular Y offset
-
-                points.push(
-                    { x: point.x + dx + offsetX, y: point.y + dy + offsetY }, // Top boundary
-                    { x: point.x - dx + offsetX, y: point.y - dy + offsetY }  // Bottom boundary
-                );
+                points.push({
+                    x: point.x + offsetX,
+                    y: point.y + offsetY
+                });
             }
 
             // Add the points for this path to the result
             pointsAlongPaths.push({
                 element: path,
                 points,
-                groupAttributes: groupAttributes, // Add group attributes to the path level
-                layerId: layerId, // Add the layer ID to the path level
+                groupAttributes: groupAttributes,
+                layerId: layerId,
             });
         }
     });
@@ -107,61 +98,130 @@ export function getPointsAlongPaths(_svg, layerId, numPoints = 10) {
     return pointsAlongPaths;
 }
 
-export function addTransformedPointsToSVG(_svg, layerId, numPoints = 10) {
-    // Get the transformed points relative to the root SVG coordinate system
-    const allPoints = getPointsAlongPaths(_svg, layerId, numPoints)
-        .flatMap(d => d.points); // Flatten the array to get all points
+/**
+ * Calculate geometry extents based on data values rather than headless rendering
+ * @param {Object} _instructions Plot instructions
+ * @returns {Object} Object containing xExtent and yExtent
+ */
+export function calculateGeometryExtents(_instructions) {
+  // Check that we have all required properties
+  if (!_instructions || !_instructions.data || !_instructions.bindings) {
+    console.warn('Missing required properties in instructions for calculateGeometryExtents');
+    return {
+      xExtent: [0, 1],
+      yExtent: [0, 1]
+    };
+  }
 
-    console.log('All Points for Voronoi:', allPoints); // Debug
-
-    // Add red dots for each point
-    _svg.append('g')
-        .attr('class', 'transformed-points')
-        .selectAll('circle')
-        .data(allPoints)
-        .join('circle')
-        .attr('cx', d => d.x) // Transformed x coordinate
-        .attr('cy', d => d.y) // Transformed y coordinate
-        .attr('r', 3) // Radius of the red dots
-        .attr('fill', 'red'); // Red color for the dots
-
-    // Compute Voronoi diagram
-    const svgWidth = +_svg.attr('width') || _svg.node().getBoundingClientRect().width;
-    const svgHeight = +_svg.attr('height') || _svg.node().getBoundingClientRect().height;
-
-    console.log('SVG Width and Height:', svgWidth, svgHeight); // Debug
-
-    const delaunay = d3.Delaunay.from(allPoints, d => d.x, d => d.y); // Create Delaunay triangulation
-    const voronoi = delaunay.voronoi([0, 0, svgWidth, svgHeight]); // Create Voronoi diagram
-
-    // Extract Voronoi edges
-    const voronoiEdges = [];
-    for (let i = 0; i < allPoints.length; i++) {
-        const cell = voronoi.cellPolygon(i); // Get the polygon for each cell
-        if (cell) {
-            for (let j = 0; j < cell.length - 1; j++) {
-                voronoiEdges.push({
-                    x1: cell[j][0],
-                    y1: cell[j][1],
-                    x2: cell[j + 1][0],
-                    y2: cell[j + 1][1],
-                });
+  const { layers, data, bindings } = _instructions;
+  
+  // Initialize extents with extreme values
+  let xMin = Infinity, xMax = -Infinity;
+  let yMin = Infinity, yMax = -Infinity;
+  
+  // Process each layer to determine extents
+  if (layers) {
+    Object.entries(layers).forEach(([layerName, layerInfo]) => {
+      if (!layerInfo) return;
+      
+      const { geometry, attributes } = layerInfo;
+      const layerData = layerInfo.transformed_data || data;
+      
+      // Extract the column names from bindings or layer-specific bindings
+      const xColumn = layerInfo.bindings?.x || bindings.x;
+      const yColumn = layerInfo.bindings?.y || bindings.y;
+      const colorColumn = layerInfo.bindings?.color || bindings.color;
+      
+      if (geometry === 'bar' && attributes?.type === 'stack' && colorColumn) {
+        // Handle stacked bar charts by calculating group totals
+        const groupedData = d3.group(layerData, d => d[xColumn]);
+        
+        groupedData.forEach((group, key) => {
+          // Calculate sum of values for each stack
+          const stackedValues = {};
+          group.forEach(item => {
+            const colorKey = item[colorColumn];
+            if (!stackedValues[colorKey]) stackedValues[colorKey] = 0;
+            stackedValues[colorKey] += +(item[yColumn] || 0);
+          });
+          
+          // Calculate total stack height
+          const total = Object.values(stackedValues).reduce((sum, val) => sum + val, 0);
+          
+          // Update y extent based on stacked total
+          yMax = Math.max(yMax, total);
+          
+          // For bar charts, include the minimum value as well
+          const minValue = Math.min(...Object.values(stackedValues));
+          yMin = Math.min(yMin, minValue);
+        });
+      } else {
+        // For other chart types, calculate simple min/max
+        layerData.forEach(d => {
+          if (xColumn && yColumn) {
+            const x = +d[xColumn];
+            const y = +d[yColumn];
+            
+            if (!isNaN(x)) {
+              xMin = Math.min(xMin, x);
+              xMax = Math.max(xMax, x);
             }
-        }
-    }
+            
+            if (!isNaN(y)) {
+              yMin = Math.min(yMin, y);
+              yMax = Math.max(yMax, y);
+            }
+          }
+        });
+      }
+    });
+  }
+  
+  // Handle case where no valid extents were found
+  if (xMin === Infinity) xMin = 0;
+  if (xMax === -Infinity) xMax = 1;
+  if (yMin === Infinity) yMin = 0;
+  if (yMax === -Infinity) yMax = 1;
+  
+  // Add padding to extents to ensure all geometries are fully visible
+  const xPadding = (xMax - xMin) * 0.05;
+  const yPadding = (yMax - yMin) * 0.10;
+  
+  xMin -= xPadding;
+  xMax += xPadding;
+  yMin -= yPadding; // Important: Add padding to yMin even if it's negative
+  yMax += yPadding;
+  
+  return {
+    xExtent: [xMin, xMax],
+    yExtent: [yMin, yMax]
+  };
+}
 
-    console.log('Voronoi Edges:', voronoiEdges); // Debug
+// Provide alias for backward compatibility
+export const calculateExtents = calculateGeometryExtents;
 
-    // Add Voronoi edges as thin black lines
-    _svg.append('g')
-        .attr('class', 'voronoi-lines')
-        .selectAll('line')
-        .data(voronoiEdges)
-        .join('line')
-        .attr('x1', d => d.x1)
-        .attr('y1', d => d.y1)
-        .attr('x2', d => d.x2)
-        .attr('y2', d => d.y2)
-        .attr('stroke', 'black') // Thin black lines
-        .attr('stroke-width', 0.5);
+/**
+ * Adjust scales based on the calculated extents
+ * @param {Object} _instructions Plot instructions
+ * @param {Object} extents Object containing xExtent and yExtent
+ */
+export function adjustScales(_instructions, extents) {
+  // Check if scales exist
+  if (!_instructions || !_instructions.scalesAndTypes) {
+    console.warn('scalesAndTypes not found in instructions for adjustScales');
+    return _instructions;
+  }
+  
+  // Adjust X scale if it's a numerical scale
+  if (_instructions.scalesAndTypes.x && _instructions.scalesAndTypes.x.type === "number") {
+    _instructions.scalesAndTypes.x.scale.domain(extents.xExtent).nice();
+  }
+  
+  // Adjust Y scale if it's a numerical scale
+  if (_instructions.scalesAndTypes.y && _instructions.scalesAndTypes.y.type === "number") {
+    _instructions.scalesAndTypes.y.scale.domain(extents.yExtent).nice();
+  }
+  
+  return _instructions;
 }

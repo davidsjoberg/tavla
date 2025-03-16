@@ -17,13 +17,10 @@ function render_layer(_svg, _instructions) {
 
             // Render the layer
             handler(_svg, layer, _instructions, layerInfo, scalesAndTypes);
-            const numPoints = 6;
-            const occupiedGridPoints = sup.getPointsAlongPaths(_svg, layerId, numPoints);
-            _instructions.layers[layer].pointspace = occupiedGridPoints
-            console.log(occupiedGridPoints);
-            sup.addTransformedPointsToSVG(_svg, layerId, numPoints)
-
-
+            
+            // Store path points for possible future use without visualizing them
+            const occupiedGridPoints = sup.getPointsAlongPaths(_svg, layerId, 6);
+            _instructions.layers[layer].pointspace = occupiedGridPoints;
         } else {
             console.warn(`No handler for geometry type: ${geometry}`);
         }

@@ -35,18 +35,37 @@ function make_scales_to_bindings(_instructions) {
         break;
 
       case "color":
-      case "stroke":
+      case "fill":
         switch (dtype) {
           case "number":
-            scaleObject.scale = d3.scaleLinear()
+            scaleObject.scale = d3.scaleSequential()
               .domain(d3.extent(data, d => d[value]))
-              .range(['royalblue', 'pink']);
+              .interpolator(d3.interpolateViridis);
             scaleObject.type = "number";
             break;
           case "string":
             scaleObject.scale = d3.scaleOrdinal()
               .domain(data.map(d => d[value]).filter((v, i, arr) => arr.indexOf(v) === i).sort())
-              .range(d3.schemeSet3);
+              .range(key === "fill" ? d3.schemeTableau10 : d3.schemeSet2);
+            scaleObject.type = "discrete";
+            break;
+          default:
+            throw new Error(`Sorry, ${dtype} is not a supported data type for binding ${key}`);
+        }
+        break;
+
+      case "stroke":
+        switch (dtype) {
+          case "number":
+            scaleObject.scale = d3.scaleLinear()
+              .domain(d3.extent(data, d => d[value]))
+              .range(['#444444', '#000000']);
+            scaleObject.type = "number";
+            break;
+          case "string":
+            scaleObject.scale = d3.scaleOrdinal()
+              .domain(data.map(d => d[value]).filter((v, i, arr) => arr.indexOf(v) === i).sort())
+              .range(['#444444', '#666666', '#888888', '#aaaaaa', '#cccccc', '#eeeeee']);
             scaleObject.type = "discrete";
             break;
           default:
@@ -59,25 +78,50 @@ function make_scales_to_bindings(_instructions) {
           case "number":
             scaleObject.scale = d3.scaleLinear()
               .domain(d3.extent(data, d => d[value]))
-              .range([5, 5000]);
+              .range([5, 400]);
             scaleObject.type = "number";
+            break;
+          case "string":
+            scaleObject.scale = d3.scaleOrdinal()
+              .domain(data.map(d => d[value]).filter((v, i, arr) => arr.indexOf(v) === i).sort())
+              .range([50, 100, 200, 300, 400]);
+            scaleObject.type = "discrete";
+            break;
+          default:
+            throw new Error(`Sorry, ${dtype} is not a supported data type for binding ${key}.`);
+        }
+        break;
+        
+      case "alpha":
+        switch (dtype) {
+          case "number":
+            scaleObject.scale = d3.scaleLinear()
+              .domain(d3.extent(data, d => d[value]))
+              .range([0.2, 0.9]);
+            scaleObject.type = "number";
+            break;
+          case "string":
+            scaleObject.scale = d3.scaleOrdinal()
+              .domain(data.map(d => d[value]).filter((v, i, arr) => arr.indexOf(v) === i).sort())
+              .range([0.3, 0.5, 0.7, 0.9]);
+            scaleObject.type = "discrete";
             break;
           default:
             throw new Error(`Sorry, ${dtype} is not a supported data type for binding ${key}.`);
         }
         break;
 
-        case "text":
-          switch (dtype) {
-              case "string":
-              case "number":
-                  scaleObject.scale = d => d[value].toString();
-                  scaleObject.type = "discrete";
-                  break;
-              default:
-                  throw new Error(`Sorry, ${dtype} is not a supported data type for binding ${key}.`);
-          }
-          break;
+      case "text":
+        switch (dtype) {
+          case "string":
+          case "number":
+            scaleObject.scale = d => d[value].toString();
+            scaleObject.type = "discrete";
+            break;
+          default:
+            throw new Error(`Sorry, ${dtype} is not a supported data type for binding ${key}.`);
+        }
+        break;
     }
 
     scalesAndTypes[key] = scaleObject;
@@ -89,37 +133,7 @@ function make_scales_to_bindings(_instructions) {
   return _instructions;
 }
 
-
-
-
-
 function scale_expand(range_array, mult) {
   const domain = range_array[1] - range_array[0];
   return [range_array[0] - domain * mult, range_array[1] + domain * mult];
 }
-
-
-
-      // const shape = d3.scaleOrdinal(
-    //     penguins.map(d => d.species),
-    //     d3.symbolsType.map(s => d3.symbol().type(s)())
-    //   )
-    
-    // const color = d3.scaleOrdinal(d3.schemeCategory10)
-
-
-      // const colorScale = d3.scaleOrdinal()
-  //   .domain(_instructions["data"].map(d => d.category).filter((value, index, array) => array.indexOf(value) === index).sort())
-  //   .range(d3.schemeSet3);
-
-  // const sizeScale = d3.scaleOrdinal()
-  //   .domain(_instructions["data"].map(d => d.category).filter((value, index, array) => array.indexOf(value) === index).sort())
-  //   .range(d3.schemeSet3);
-
-  // const strokeScale = d3.scaleOrdinal()
-  //   .domain(_instructions["data"].map(d => d.category).filter((value, index, array) => array.indexOf(value) === index).sort())
-  //   .range(d3.schemeSet3);
-
-  // const strokeSizeScale = d3.scaleOrdinal()
-  //   .domain(_instructions["data"].map(d => d.category).filter((value, index, array) => array.indexOf(value) === index).sort())
-  //   .range(d3.schemeSet3);

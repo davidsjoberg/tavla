@@ -12,35 +12,18 @@ function dirigent(_div, _instructions, _plot_width, _plotId) {
     // Step 1: Add geoms needed
     _instructions = preps.get_geometries(_instructions, geoms.geomDatabase); 
     
-    // Step 2: Set up INITIAL dimensions without legend calculations
-    // This creates a basic dimensions object that we'll refine later
-    const titleHeight = _instructions.labels ? panel.measureTitleHeight(_instructions, _plot_width) : 0;
-    
-    // Calculate initial dimensions with basic margins - no legend space yet
-    _instructions.dimensions = {
-      width: _plot_width,
-      height: _plot_width / 1.6 + titleHeight,
-      marginTop: _plot_width * 0.02 + titleHeight,
-      marginRight: _plot_width * 0.06,
-      marginBottom: _plot_width * 0.08,
-      marginLeft: _plot_width * 0.08,
-      titleHeight: titleHeight,
-      ctrWidth: _plot_width - (_plot_width * 0.08 * 2) - (_plot_width * 0.06),
-      ctrHeight: (_plot_width / 1.6) - (_plot_width * 0.02 + titleHeight) - (_plot_width * 0.08)
-    };
-    
-    // Step 3: Now we can create scales using these initial dimensions
+    // Step 2: Create scales and prepare data
     _instructions = preps.transform_data(_instructions);
     _instructions = scales.make_scales_to_bindings(_instructions);
     _instructions = preps.prepare_extended_instructions(_instructions);
     
-    // Step 4: NOW calculate final dimensions with proper legend space
+    // Step 3: Calculate dimensions with intelligent legend layout
     _instructions.dimensions = panel.panel_dimensions(_plot_width, _instructions);
     
-    // Step 5: Update scale ranges to match new dimensions
+    // Step 4: Update scale ranges to match new dimensions
     _instructions = scales.updateScaleRanges(_instructions);
     
-    // Step 6: Create a headless SVG for calculating data bounds
+    // Step 5: Create a headless SVG for calculating data bounds
     const tempSvg = d3.create("svg")
       .attr("width", _instructions.dimensions.width)
       .attr("height", _instructions.dimensions.height)
@@ -50,11 +33,11 @@ function dirigent(_div, _instructions, _plot_width, _plotId) {
     
     document.body.appendChild(tempSvg.node());
     
-    // Step 7: Create container group with correct transform
+    // Step 6: Create container group with correct transform
     const tempContainer = tempSvg.append("g")
       .attr("transform", `translate(${_instructions.dimensions.marginLeft}, ${_instructions.dimensions.marginTop})`);
     
-    // Step 8: Render all layers headlessly to measure
+    // Step 7: Render all layers headlessly to measure
     const render_functions_list = preps.extractRenderFunctions(_instructions);
     
     // Create separate layer groups to track each layer's elements
@@ -74,7 +57,7 @@ function dirigent(_div, _instructions, _plot_width, _plotId) {
       }
     }
     
-    // Step 9: Calculate bounds and adjust scales
+    // Step 8: Calculate bounds and adjust scales
     try {
       // First collect bounding boxes for each individual layer
       const layerBoundingBoxes = {};
@@ -135,14 +118,27 @@ function dirigent(_div, _instructions, _plot_width, _plotId) {
       tempSvg.remove();
     }
     
-    // Step 10: Create the final SVG for display
+    // Step 9: Create the final SVG for display
     let svg = d3.select(_div)
       .append("svg")
       .attr("id", _plotId)
       .attr("width", _instructions.dimensions.width)
       .attr("height", _instructions.dimensions.height);
     
-    // Step 11: Render titles, panel, layers, axes, and legends
+    // Add basic styles for legends if not already included
+    if (!document.getElementById('tavla-legend-styles')) {
+      const styleElement = document.createElement('style');
+      styleElement.id = 'tavla-legend-styles';
+      styleElement.textContent = `
+        .legends-container { font-family: Arial, sans-serif; }
+        .legend-title { font-weight: 600; font-size: 12px; margin-bottom: 4px; }
+        .legend-item text { font-size: 11px; dominant-baseline: middle; }
+        .legend-item { margin-bottom: 2px; }
+      `;
+      document.head.appendChild(styleElement);
+    }
+    
+    // Step 10: Render titles, panel, layers, axes, and legends
     svg = panel.render_titles(svg, _instructions);
     svg = panel.plot_panel(svg, _instructions);
     svg = render.render_layer(svg, _instructions);

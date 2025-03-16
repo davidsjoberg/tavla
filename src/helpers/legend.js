@@ -2,16 +2,14 @@ export { createLegends, calculateLegendSpace };
 import * as geoms from './geoms.js';
 
 /**
- * Headlessly calculate how much space is needed for legends
- * @param {Object} _instructions - The visualization instructions
- * @returns {Object} Object with width and height needed for legends
+ * Calculates how much space is needed for legends and determines optimal layout
  */
 function calculateLegendSpace(_instructions) {
   // First check if we have any bindings that would create legends
   const { bindings } = _instructions;
   
   if (!bindings || Object.keys(bindings).length === 0) {
-    return { width: 0, height: 0 };
+    return { width: 0, height: 0, layout: 'none' };
   }
   
   // Skip positional aesthetics
@@ -22,7 +20,7 @@ function calculateLegendSpace(_instructions) {
   
   // If no legends are needed, return zeros immediately
   if (legendAesthetics.length === 0) {
-    return { width: 0, height: 0 };
+    return { width: 0, height: 0, layout: 'none' };
   }
   
   // Create a temporary SVG for measuring
@@ -33,17 +31,9 @@ function calculateLegendSpace(_instructions) {
   
   document.body.appendChild(tempSvg.node());
   
-  // Render legends in the temporary SVG
+  // Measure each legend's dimensions individually
   const { scalesAndTypes } = _instructions;
-  
-  // Create a container for all legends
-  const legendsGroup = tempSvg.append("g")
-    .attr("class", "temp-legends-container");
-  
-  // Track vertical position for multiple legends
-  let currentY = 10;
-  const legendSpacing = 15;
-  let maxWidth = 0;
+  const legendDimensions = [];
   
   // Process each aesthetic that needs a legend
   legendAesthetics.forEach(aesthetic => {
@@ -52,306 +42,223 @@ function calculateLegendSpace(_instructions) {
     const { scale, type } = scalesAndTypes[aesthetic];
     const title = bindings[aesthetic]; // Use the data column as title
     
-    // Create legend group
-    const legend = legendsGroup.append("g")
-      .attr("class", `legend-${aesthetic}`)
-      .attr("transform", `translate(0, ${currentY})`);
+    // Create a temporary legend group to measure
+    const tempGroup = tempSvg.append("g").attr("class", `legend-measure-${aesthetic}`);
+    const { width, height } = measureLegendSize(tempGroup, scale, type, aesthetic, _instructions, title);
     
-    // Add legend title
-    const titleElement = legend.append("text")
-      .attr("class", "legend-title")
-      .attr("x", 0)
-      .attr("y", 0)
-      .attr("font-size", "12px")
-      .attr("font-weight", "bold")
-      .attr("text-anchor", "start")
-      .text(title);
+    legendDimensions.push({
+      aesthetic,
+      width,
+      height
+    });
     
-    // Measure title width
-    try {
-      const titleBBox = titleElement.node().getBBox();
-      maxWidth = Math.max(maxWidth, titleBBox.width);
-    } catch (e) {
-      console.warn("Error measuring legend title", e);
-    }
-    
-    currentY += 25; // Move down after title - increased for better spacing
-    
-    // Calculate space based on aesthetic type
-    if (aesthetic === 'color' || aesthetic === 'fill') {
-      const { height, width } = measureColorLegendSpace(legend, scale, type, aesthetic, _instructions, currentY);
-      currentY += height + legendSpacing;
-      maxWidth = Math.max(maxWidth, width);
-    } 
-    else if (aesthetic === 'size') {
-      const { height, width } = measureSizeLegendSpace(legend, scale, type, aesthetic, _instructions, currentY);
-      currentY += height + legendSpacing;
-      maxWidth = Math.max(maxWidth, width);
-    }
-    else if (aesthetic === 'alpha' || aesthetic === 'stroke' || aesthetic === 'shape') {
-      // General case for other aesthetics
-      const { height, width } = measureGenericLegendSpace(legend, scale, type, aesthetic, _instructions, currentY);
-      currentY += height + legendSpacing;
-      maxWidth = Math.max(maxWidth, width);
-    }
+    // Remove this temporary legend now that we've measured it
+    tempGroup.remove();
   });
   
   // Clean up
   tempSvg.remove();
   
-  // Add some padding to the width
-  maxWidth += 30;
+  // Determine optimal layout based on available space and legend dimensions
+  const layout = determineLegendLayout(legendDimensions, _instructions);
   
-  // Return the calculated dimensions - ensure we return zero if no legends are actually rendered
-  return legendAesthetics.length > 0 ? { 
-    width: Math.max(130, maxWidth), // Ensure minimum width
-    height: currentY + 10 // Add padding at bottom
-  } : { width: 0, height: 0 };
-}
-
-// Helper functions to measure space needed by different legend types
-function measureColorLegendSpace(legend, scale, type, aesthetic, _instructions, startY) {
-  if (type === 'discrete') {
-    const domain = scale.domain();
-    const itemCount = domain.length;
-    
-    // Create a sample item to measure
-    const sampleItem = legend.append("g").attr("transform", `translate(0, ${startY})`);
-    
-    sampleItem.append("rect")
-      .attr("x", 0)
-      .attr("y", -9)
-      .attr("width", 12)
-      .attr("height", 12);
-    
-    const sampleText = sampleItem.append("text")
-      .attr("x", 20)
-      .attr("y", 0)
-      .attr("font-size", "11px")
-      .text(domain.length > 0 ? domain[0] : "Sample");
-    
-    // Measure text width
-    let textWidth = 0;
-    try {
-      const bbox = sampleText.node().getBBox();
-      textWidth = bbox.width;
-    } catch (e) {
-      textWidth = 80; // Fallback if measurement fails
-    }
-    
-    // Total width = color swatch + spacing + text
-    const width = 20 + textWidth + 10; // 20px for rect + spacing, 10px extra padding
-    const height = itemCount * 20; // Each item is approx 20px tall
-    
-    return { width, height };
-  } else {
-    // For continuous color scale, measure height of gradient + labels
-    return { width: 90, height: 120 }; // Gradient + labels
-  }
-}
-
-function measureSizeLegendSpace(legend, scale, type, aesthetic, _instructions, startY) {
-  const domain = scale.domain();
-  
-  if (type === 'discrete') {
-    const itemCount = domain.length;
-    
-    // Create a sample item to measure
-    const sampleItem = legend.append("g").attr("transform", `translate(0, ${startY})`);
-    
-    const primaryGeometry = determineGeometryType(_instructions);
-    const size = scale(domain[0] || 0);
-    
-    if (primaryGeometry === 'point') {
-      sampleItem.append("circle")
-        .attr("cx", 6)
-        .attr("cy", 0)
-        .attr("r", Math.sqrt(size / Math.PI));
-    } else {
-      // For other geometries, use a line or rect
-      sampleItem.append("line")
-        .attr("x1", 0)
-        .attr("y1", 0)
-        .attr("x2", 15)
-        .attr("y2", 0);
-    }
-    
-    const sampleText = sampleItem.append("text")
-      .attr("x", 25)
-      .attr("y", 0)
-      .attr("font-size", "11px")
-      .text(domain.length > 0 ? domain[0] : "Sample");
-    
-    // Measure text width
-    let textWidth = 0;
-    try {
-      const bbox = sampleText.node().getBBox();
-      textWidth = bbox.width;
-    } catch (e) {
-      textWidth = 80; // Fallback
-    }
-    
-    const width = 25 + textWidth + 10;
-    const height = itemCount * 20;
-    
-    return { width, height };
-  } else {
-    // For continuous size scale
-    return { width: 100, height: 100 };
-  }
-}
-
-function measureGenericLegendSpace(legend, scale, type, aesthetic, _instructions, startY) {
-  if (type === 'discrete') {
-    const domain = scale.domain();
-    const itemCount = domain.length;
-    return { width: 100, height: itemCount * 20 };
-  } else {
-    // For continuous scales
-    return { width: 90, height: 80 };
-  }
+  return {
+    ...layout,
+    legendItems: legendDimensions
+  };
 }
 
 /**
- * Special fixed size legend renderer to avoid positioning issues - simplified version
+ * Measures the size of an individual legend with more accurate width calculation
  */
-function renderFixedSizeLegend(legend, scale, type, aesthetic, _instructions, startY) {
-  const primaryGeometry = determineGeometryType(_instructions);
-  const shapeType = determineShapeType(_instructions);
+function measureLegendSize(legendGroup, scale, type, aesthetic, _instructions, title) {
+  // Simulate creating a legend to measure its size
   
-  // Fixed spacing between legend items
-  const itemSpacing = 25;
+  // Add title
+  const titleElement = legendGroup.append("text")
+    .attr("class", "legend-title")
+    .attr("x", 0)
+    .attr("y", 0)
+    .attr("font-size", "12px")
+    .attr("font-weight", "bold")
+    .attr("text-anchor", "start")
+    .text(title);
   
-  // Create a container group for all size items to ensure proper positioning
-  const sizeGroup = legend.append("g")
-    .attr("class", "size-legend-group")
-    .attr("transform", `translate(0, ${startY})`);
+  let titleHeight = 25; // Default height allocation for title
+  let totalHeight = titleHeight;
+  let maxWidth = 0;
   
-  if (type === 'discrete') {
-    const domain = scale.domain();
-    let itemY = 0;
-    
-    // Render each discrete value
-    domain.forEach(value => {
-      const size = scale(value);
-      
-      // Create group for this item
-      const itemGroup = sizeGroup.append("g")
-        .attr("class", "size-legend-item")
-        .attr("transform", `translate(0, ${itemY})`);
-      
-      // Render appropriate shape based on geometry
-      if (primaryGeometry === 'point') {
-        if (shapeType === 'circle') {
-          // Circle
-          const radius = Math.sqrt(size / Math.PI);
-          itemGroup.append("circle")
-            .attr("cx", 8)
-            .attr("cy", 0)
-            .attr("r", radius)
-            .attr("fill", "steelblue")
-            .attr("stroke", "black")
-            .attr("stroke-width", 0.5);
-        } else {
-          // Other shape
-          itemGroup.append("path")
-            .attr("transform", `translate(8, 0)`)
-            .attr("d", d3.symbol().type(getSymbolType(shapeType)).size(size)())
-            .attr("fill", "steelblue")
-            .attr("stroke", "black")
-            .attr("stroke-width", 0.5);
-        }
-      } else if (primaryGeometry === 'line') {
-        // Line
-        itemGroup.append("line")
-          .attr("x1", 0)
-          .attr("y1", 0)
-          .attr("x2", 16)
-          .attr("y2", 0)
-          .attr("stroke", "steelblue")
-          .attr("stroke-width", size / 5);
-      }
-      
-      // Add text label
-      itemGroup.append("text")
-        .attr("x", 25)
-        .attr("y", 0)
-        .attr("font-size", "11px")
-        .attr("text-anchor", "start")
-        .attr("dominant-baseline", "middle")
-        .text(value);
-      
-      // Move to next position
-      itemY += itemSpacing;
-    });
-    
-    return startY + itemY;
-  } else {
-    // Continuous size scale
-    const domain = scale.domain();
-    const niceValues = generateNiceValues(domain, 5);
-    let itemY = 0;
-    
-    // Render each value
-    niceValues.forEach(value => {
-      const size = scale(value);
-      
-      // Create group for this item
-      const itemGroup = sizeGroup.append("g")
-        .attr("class", "size-legend-item")
-        .attr("transform", `translate(0, ${itemY})`);
-      
-      // Render appropriate shape based on geometry
-      if (primaryGeometry === 'point') {
-        if (shapeType === 'circle') {
-          const radius = Math.sqrt(size / Math.PI);
-          itemGroup.append("circle")
-            .attr("cx", 8)
-            .attr("cy", 0)
-            .attr("r", radius)
-            .attr("fill", "steelblue")
-            .attr("stroke", "black")
-            .attr("stroke-width", 0.5);
-        } else {
-          itemGroup.append("path")
-            .attr("transform", `translate(8, 0)`)
-            .attr("d", d3.symbol().type(getSymbolType(shapeType)).size(size)())
-            .attr("fill", "steelblue")
-            .attr("stroke", "black")
-            .attr("stroke-width", 0.5);
-        }
-      } else if (primaryGeometry === 'line') {
-        itemGroup.append("line")
-          .attr("x1", 0)
-          .attr("y1", 0)
-          .attr("x2", 16)
-          .attr("y2", 0)
-          .attr("stroke", "steelblue")
-          .attr("stroke-width", size / 5);
-      }
-      
-      // Add text label
-      itemGroup.append("text")
-        .attr("x", 25)
-        .attr("y", 0)
-        .attr("font-size", "11px")
-        .attr("text-anchor", "start")
-        .attr("dominant-baseline", "middle")
-        .text(prettifyNumber(value));
-      
-      // Move to next position
-      itemY += itemSpacing;
-    });
-    
-    return startY + itemY;
+  try {
+    // Measure title width
+    const titleBBox = titleElement.node().getBBox();
+    maxWidth = Math.max(maxWidth, titleBBox.width);
+    titleHeight = titleBBox.height + 10; // Add padding
+  } catch (e) {
+    console.warn("Error measuring legend title", e);
   }
+  
+  // Add dummy items based on the aesthetic type to estimate size with tighter width estimates
+  if (isColorAesthetic(aesthetic)) {
+    const { itemHeight, itemWidth } = measureColorLegendItems(legendGroup, scale, type, aesthetic, _instructions, titleHeight);
+    totalHeight += itemHeight;
+    maxWidth = Math.max(maxWidth, itemWidth);
+  }
+  else if (aesthetic === 'size') {
+    const { itemHeight, itemWidth } = measureSizeLegendItems(legendGroup, scale, type, aesthetic, _instructions, titleHeight);
+    totalHeight += itemHeight;
+    maxWidth = Math.max(maxWidth, itemWidth);
+  }
+  else {
+    const { itemHeight, itemWidth } = measureGenericLegendItems(legendGroup, scale, type, aesthetic, _instructions, titleHeight);
+    totalHeight += itemHeight;
+    maxWidth = Math.max(maxWidth, itemWidth);
+  }
+  
+  // Add minimal padding - we want tight width measurements
+  maxWidth += 10;
+  
+  return {
+    width: maxWidth, // Remove minimum width constraint
+    height: totalHeight + 10 // Add padding at bottom
+  };
 }
 
 /**
- * Creates legends for non-positional aesthetics 
+ * Determines the optimal layout for legends with improved space efficiency
+ */
+function determineLegendLayout(legendItems, _instructions) {
+  // Get total chart dimensions (approximate if not yet finalized)
+  const plotWidth = _instructions.dimensions?.width || 600;
+  const plotHeight = _instructions.dimensions?.height || 400;
+  
+  // Calculate total legend size if they were all stacked vertically
+  let totalLegendHeight = legendItems.reduce((sum, item) => sum + item.height, 0);
+  
+  // Find the actual max width needed (not theoretical max)
+  const maxLegendWidth = legendItems.length > 0 ? 
+    Math.max(...legendItems.map(item => item.width)) : 0;
+  
+  // If we have a single legend or no legends, just use its width
+  if (legendItems.length <= 1) {
+    return {
+      width: maxLegendWidth,
+      height: totalLegendHeight,
+      layout: legendItems.length === 0 ? 'none' : 'single-column'
+    };
+  }
+  
+  // Maximum allowable legend height (percentage of plot height)
+  const maxAllowedLegendHeight = plotHeight * 0.7; // 70% of plot height
+  
+  // If vertical stacking is fine and doesn't exceed max height, use single column
+  if (totalLegendHeight <= maxAllowedLegendHeight) {
+    return {
+      width: maxLegendWidth,
+      height: totalLegendHeight,
+      layout: 'single-column'
+    };
+  }
+  
+  // For multi-column, be more conservative with legend width
+  // Determine optimal number of columns
+  const numColumns = calculateOptimalColumnCount(
+    legendItems, 
+    plotWidth, 
+    plotHeight, 
+    maxAllowedLegendHeight
+  );
+  
+  // Calculate multi-column layout with tighter spacing
+  return calculateMultiColumnLayout(legendItems, numColumns);
+}
+
+/**
+ * Calculates optimal number of columns for legends
+ */
+function calculateOptimalColumnCount(legendItems, plotWidth, plotHeight, maxAllowedHeight) {
+  if (legendItems.length <= 1) return 1;
+  
+  // Start with 1 column and increase until we find a suitable layout
+  let columns = 1;
+  let currentHeight = legendItems.reduce((sum, item) => sum + item.height, 0);
+  
+  while (currentHeight > maxAllowedHeight && columns < legendItems.length) {
+    columns++;
+    
+    // Estimate height with current column count
+    const itemsPerColumn = Math.ceil(legendItems.length / columns);
+    const columnHeights = new Array(columns).fill(0);
+    
+    // Distribute items across columns
+    legendItems.forEach((item, i) => {
+      const columnIndex = Math.floor(i / itemsPerColumn);
+      columnHeights[columnIndex] += item.height;
+    });
+    
+    // The tallest column determines the overall height
+    currentHeight = Math.max(...columnHeights);
+    
+    // Avoid making too many columns - check total width vs plot width
+    const avgItemWidth = legendItems.reduce((sum, item) => sum + item.width, 0) / legendItems.length;
+    if ((avgItemWidth + 10) * columns > plotWidth * 0.25) break;  // Limit legend width to 25% of plot
+  }
+  
+  return columns;
+}
+
+/**
+ * Calculate multi-column layout with more efficient spacing
+ */
+function calculateMultiColumnLayout(legendItems, columns) {
+  // More efficient width calculation
+  const itemsPerColumn = Math.ceil(legendItems.length / columns);
+  const columnHeights = new Array(columns).fill(0);
+  const columnWidths = new Array(columns).fill(0);
+  
+  // Distribute items across columns and track actual widths
+  legendItems.forEach((item, i) => {
+    const columnIndex = Math.floor(i / itemsPerColumn);
+    columnHeights[columnIndex] += item.height;
+    columnWidths[columnIndex] = Math.max(columnWidths[columnIndex], item.width);
+  });
+  
+  // Calculate total dimensions - tighter spacing
+  const totalHeight = Math.max(...columnHeights);
+  
+  // Use smaller column spacing
+  const columnSpacing = 10;
+  let totalWidth = 0;
+  
+  for (let i = 0; i < columnWidths.length; i++) {
+    totalWidth += columnWidths[i];
+    if (i < columnWidths.length - 1) {
+      totalWidth += columnSpacing;
+    }
+  }
+  
+  return {
+    width: totalWidth,
+    height: totalHeight,
+    layout: 'multi-column',
+    columns,
+    columnWidths,
+    columnSpacing,
+    itemsPerColumn
+  };
+}
+
+/**
+ * Helper function to check if aesthetic is color-related
+ */
+function isColorAesthetic(aesthetic) {
+  return ['color', 'fill', 'stroke'].includes(aesthetic);
+}
+
+/**
+ * Creates legends with optimal layout and positioning
  */
 function createLegends(_svg, _instructions) {
-  const { bindings, scalesAndTypes, dimensions, layers } = _instructions;
+  const { bindings, scalesAndTypes, dimensions } = _instructions;
   
   // Skip positional aesthetics and determine which need legends
   const positionalAesthetics = ['x', 'y', 'text'];
@@ -362,28 +269,50 @@ function createLegends(_svg, _instructions) {
   // If no legends are needed, return early
   if (legendAesthetics.length === 0) return _svg;
   
-  try {
-    // Create container for legends
+  try { 
+    // Create container for legends - position exactly at the right edge of the plot area
     const legendsGroup = _svg.append("g")
-      .attr("class", "legends-container")
+      .attr("class", "legends-container") // Reduced X padding
       .attr("transform", `translate(${dimensions.ctrWidth + 20}, 20)`);
     
-    let currentY = 0;
-    const legendSpacing = 15;
+    // Extract layout information
+    const layout = _instructions.legendLayout || {
+      layout: 'single-column',
+      columns: 1, // Use tighter spacing
+      columnSpacing: 12,
+      itemsPerColumn: legendAesthetics.length
+    };
+    
+    // Track current positions for placing legends
+    const currentY = Array(layout.columns || 1).fill(0);
     
     // Analyze layers
-    const hasPointLayer = Object.values(layers || {}).some(layer => layer.geometry === 'point');
-    const hasLineLayer = Object.values(layers || {}).some(layer => layer.geometry === 'line');
+    const hasPointLayer = Object.values(_instructions.layers || {}).some(layer => layer.geometry === 'point');
+    const hasLineLayer = Object.values(_instructions.layers || {}).some(layer => layer.geometry === 'line');
     const combinedLineDot = hasPointLayer && hasLineLayer;
     
-    // Process each legend
-    legendAesthetics.forEach(aesthetic => {
+    // Process each legend with improved positioning
+    legendAesthetics.forEach((aesthetic, index) => {
       if (!scalesAndTypes[aesthetic]) return;
       
       const { scale, type } = scalesAndTypes[aesthetic];
       const title = bindings[aesthetic];
       
-      // Create legend group
+      // Determine column for this legend in multi-column layout
+      const column = layout.layout === 'multi-column' 
+        ? Math.floor(index / layout.itemsPerColumn)
+        : 0;
+      
+      // Calculate x-position based on column - tighter layout
+      let xPosition = 0;
+      if (layout.layout === 'multi-column' && column > 0) {
+        // Sum widths of previous columns plus spacing
+        for (let i = 0; i < column; i++) {
+          xPosition += layout.columnWidths[i] + layout.columnSpacing;
+        }
+      }
+      
+      // Create legend with the right ID and position
       const legendId = `legend-${aesthetic}-${_instructions.id || Math.random().toString(36).substring(2, 10)}`;
       
       // Remove any existing legends with this ID
@@ -392,7 +321,7 @@ function createLegends(_svg, _instructions) {
       const legend = legendsGroup.append("g")
         .attr("class", `legend-${aesthetic}`)
         .attr("id", legendId)
-        .attr("transform", `translate(0, ${currentY})`);
+        .attr("transform", `translate(${xPosition}, ${currentY[column]})`);
       
       // Add title
       legend.append("text")
@@ -404,27 +333,29 @@ function createLegends(_svg, _instructions) {
         .attr("text-anchor", "start")
         .text(title);
       
-      // Render legend items - starting at fixed position below title
-      const titleHeight = 25; // Fixed space for title
+      // Render legend items below title with improved spacing
+      const titleHeight = 25; // Fixed height for title
       
       try {
-        if (aesthetic === 'color' || aesthetic === 'fill') {
-          currentY = renderColorLegend(legend, scale, type, aesthetic, _instructions, titleHeight, combinedLineDot);
+        let legendHeight = titleHeight;
+        
+        if (isColorAesthetic(aesthetic)) {
+          legendHeight = renderColorLegend(legend, scale, type, aesthetic, _instructions, titleHeight, combinedLineDot);
         } 
         else if (aesthetic === 'size') {
-          // Skip size legend for certain examples
-          if (!(hasPointLayer && Object.keys(layers).includes('highlights') && Object.keys(layers).includes('circles'))) {
-            currentY = renderFixedSizeLegend(legend, scale, type, aesthetic, _instructions, titleHeight);
+          if (!(hasPointLayer && Object.keys(_instructions.layers).includes('highlights') && Object.keys(_instructions.layers).includes('circles'))) {
+            legendHeight = renderFixedSizeLegend(legend, scale, type, aesthetic, _instructions, titleHeight);
           }
         }
-        else if (aesthetic === 'alpha') {
-          currentY = renderAlphaLegend(legend, scale, type, aesthetic, _instructions, titleHeight);
+        else if (aesthetic === 'alpha' || aesthetic === 'strokeWidth') {
+          legendHeight = renderGenericLegend(legend, scale, type, aesthetic, _instructions, titleHeight);
         }
+        
+        // Update current Y position for this column
+        currentY[column] = currentY[column] + (legendHeight - titleHeight) + 15; // Add spacing
       } catch (e) {
         console.error(`Error rendering ${aesthetic} legend:`, e);
       }
-      
-      currentY += legend.node().getBBox().height + legendSpacing;
     });
     
     return _svg;
@@ -439,11 +370,8 @@ function createLegends(_svg, _instructions) {
  * Returns the new vertical position
  */
 function renderColorLegend(legend, scale, type, aesthetic, _instructions, startY, combinedLineDot) {
-  const { layers } = _instructions;
   const primaryGeometry = determineGeometryType(_instructions);
-  
-  // Extract attributes from corresponding geometry layer
-  const attributes = extractGeometryAttributes(_instructions, primaryGeometry, combinedLineDot);
+  const attributes = extractGeometryAttributes(_instructions, primaryGeometry);
   
   if (type === 'discrete') {
     // Get domain values
@@ -453,16 +381,16 @@ function renderColorLegend(legend, scale, type, aesthetic, _instructions, startY
     // Create legend items for each discrete value
     domain.forEach((value, i) => {
       const itemGroup = legend.append("g")
+        .attr("class", "legend-item")
         .attr("transform", `translate(0, ${currentY})`);
       
       const colorValue = scale(value);
       
-      // FALLBACK RENDERING - if the geometry-specific rendering fails
+      // Render appropriate swatch based on geometry
       if (primaryGeometry === 'line' || combinedLineDot) {
-        // Make the line slightly thicker in the legend for better visibility
+        // Line swatch
         const lineWidth = (attributes.size || 2) * 1.2;
         
-        // Draw the line 
         itemGroup.append("line")
           .attr("x1", 0)
           .attr("y1", 0)
@@ -472,7 +400,7 @@ function renderColorLegend(legend, scale, type, aesthetic, _instructions, startY
           .attr("stroke-width", lineWidth)
           .attr("stroke-dasharray", getLineDashArray(attributes.lineType));
         
-        // Add a dot for combined line+point charts
+        // Add dot for combined line+point charts
         if (combinedLineDot) {
           itemGroup.append("circle")
             .attr("cx", 10)
@@ -485,6 +413,7 @@ function renderColorLegend(legend, scale, type, aesthetic, _instructions, startY
       }
       else if (primaryGeometry === 'point') {
         const shapeType = determineShapeType(_instructions);
+        // Point swatch
         if (shapeType === 'circle') {
           itemGroup.append("circle")
             .attr("cx", 6)
@@ -503,7 +432,7 @@ function renderColorLegend(legend, scale, type, aesthetic, _instructions, startY
         }
       }
       else {
-        // For bar charts or other types, use a rectangle
+        // Default rectangle swatch
         itemGroup.append("rect")
           .attr("x", 0)
           .attr("y", -6)
@@ -586,6 +515,141 @@ function renderColorLegend(legend, scale, type, aesthetic, _instructions, startY
 }
 
 /**
+ * Special fixed size legend renderer to avoid positioning issues - simplified version
+ */
+function renderFixedSizeLegend(legend, scale, type, aesthetic, _instructions, startY) {
+  const primaryGeometry = determineGeometryType(_instructions);
+  const shapeType = determineShapeType(_instructions);
+  
+  // Fixed spacing between legend items
+  const itemSpacing = 25;
+  
+  // Create a container group for all size items to ensure proper positioning
+  const sizeGroup = legend.append("g")
+    .attr("class", "size-legend-group")
+    .attr("transform", `translate(0, ${startY})`);
+  
+  if (type === 'discrete') {
+    const domain = scale.domain();
+    let itemY = 0;
+    
+    // Render each discrete value
+    domain.forEach(value => {
+      const size = scale(value);
+      
+      // Create group for this item
+      const itemGroup = sizeGroup.append("g")
+        .attr("class", "legend-item")
+        .attr("transform", `translate(0, ${itemY})`);
+      
+      // Render appropriate shape based on geometry
+      if (primaryGeometry === 'point') {
+        if (shapeType === 'circle') {
+          // Circle
+          const radius = Math.sqrt(size / Math.PI);
+          itemGroup.append("circle")
+            .attr("cx", 8)
+            .attr("cy", 0)
+            .attr("r", radius)
+            .attr("fill", "steelblue")
+            .attr("stroke", "black")
+            .attr("stroke-width", 0.5);
+        } else {
+          // Other shape
+          itemGroup.append("path")
+            .attr("transform", `translate(8, 0)`)
+            .attr("d", d3.symbol().type(getSymbolType(shapeType)).size(size)())
+            .attr("fill", "steelblue")
+            .attr("stroke", "black")
+            .attr("stroke-width", 0.5);
+        }
+      } else if (primaryGeometry === 'line') {
+        // Line
+        itemGroup.append("line")
+          .attr("x1", 0)
+          .attr("y1", 0)
+          .attr("x2", 16)
+          .attr("y2", 0)
+          .attr("stroke", "steelblue")
+          .attr("stroke-width", size / 5);
+      }
+      
+      // Add text label
+      itemGroup.append("text")
+        .attr("x", 25)
+        .attr("y", 0)
+        .attr("font-size", "11px")
+        .attr("text-anchor", "start")
+        .attr("dominant-baseline", "middle")
+        .text(value);
+      
+      // Move to next position
+      itemY += itemSpacing;
+    });
+    
+    return startY + itemY;
+  } else {
+    // Continuous size scale
+    const domain = scale.domain();
+    const niceValues = generateNiceValues(domain, 5);
+    let itemY = 0;
+    
+    // Render each value
+    niceValues.forEach(value => {
+      const size = scale(value);
+      
+      // Create group for this item
+      const itemGroup = sizeGroup.append("g")
+        .attr("class", "legend-item")
+        .attr("transform", `translate(0, ${itemY})`);
+      
+      // Render appropriate shape based on geometry
+      if (primaryGeometry === 'point') {
+        if (shapeType === 'circle') {
+          const radius = Math.sqrt(size / Math.PI);
+          itemGroup.append("circle")
+            .attr("cx", 8)
+            .attr("cy", 0)
+            .attr("r", radius)
+            .attr("fill", "steelblue")
+            .attr("stroke", "black")
+            .attr("stroke-width", 0.5);
+        } else {
+          itemGroup.append("path")
+            .attr("transform", `translate(8, 0)`)
+            .attr("d", d3.symbol().type(getSymbolType(shapeType)).size(size)())
+            .attr("fill", "steelblue")
+            .attr("stroke", "black")
+            .attr("stroke-width", 0.5);
+        }
+      } else if (primaryGeometry === 'line') {
+        itemGroup.append("line")
+          .attr("x1", 0)
+          .attr("y1", 0)
+          .attr("x2", 16)
+          .attr("y2", 0)
+          .attr("stroke", "steelblue")
+          .attr("stroke-width", size / 5);
+      }
+      
+      // Add text label
+      itemGroup.append("text")
+        .attr("x", 25)
+        .attr("y", 0)
+        .attr("font-size", "11px")
+        .attr("text-anchor", "start")
+        .attr("dominant-baseline", "middle")
+        .text(prettifyNumber(value));
+      
+      // Move to next position
+      itemY += itemSpacing;
+    });
+    
+    return startY + itemY;
+  }
+}
+
+/**
  * Returns the stroke-dasharray value for a line type
  */
 function getLineDashArray(lineType) {
@@ -602,296 +666,30 @@ function getLineDashArray(lineType) {
 }
 
 /**
- * Extract line attributes from instructions
+ * Generic legend renderer for additional aesthetic bindings
  */
-function extractLineAttributes(_instructions) {
-  const { layers } = _instructions;
-  const lineAttrs = {};
-  
-  // Find the first line layer
-  for (const layerName in layers) {
-    const layer = layers[layerName];
-    if (layer.geometry === 'line' && layer.attributes) {
-      // Copy over the line attributes
-      if (layer.attributes.size) lineAttrs.size = layer.attributes.size;
-      if (layer.attributes.lineType) lineAttrs.lineType = layer.attributes.lineType;
-      if (layer.attributes.stroke) lineAttrs.stroke = layer.attributes.stroke;
-      if (layer.attributes.strokeWidth) lineAttrs.strokeWidth = layer.attributes.strokeWidth;
-      break; // Just use the first line layer we find
-    }
-  }
-  
-  return lineAttrs;
-}
-
-/**
- * Extract point attributes from instructions
- */
-function extractPointAttributes(_instructions) {
-  const { layers } = _instructions;
-  const pointAttrs = {};
-  
-  // Find the first point layer
-  for (const layerName in layers) {
-    const layer = layers[layerName];
-    if (layer.geometry === 'point' && layer.attributes) {
-      // Copy over the point attributes
-      if (layer.attributes.size) pointAttrs.size = layer.attributes.size;
-      if (layer.attributes.shape) pointAttrs.shape = layer.attributes.shape;
-      if (layer.attributes.stroke) pointAttrs.stroke = layer.attributes.stroke;
-      if (layer.attributes.strokeWidth) pointAttrs.strokeWidth = layer.attributes.strokeWidth;
-      break; // Just use the first point layer we find
-    }
-  }
-  
-  return pointAttrs;
-}
-
-/**
- * Completely reimplemented size legend renderer to fix positioning issues
- * Returns the new vertical position after all items are drawn
- */
-function renderSizeLegend(legend, scale, type, aesthetic, _instructions, startY) {
-  // Clear any existing content to prevent stacking on re-renders
-  legend.selectAll(".size-legend-item").remove();
-  
+function renderGenericLegend(legend, scale, type, aesthetic, _instructions, startY) {
   const primaryGeometry = determineGeometryType(_instructions);
   const shapeType = determineShapeType(_instructions);
   
-  // Set a consistent minimum spacing between items
-  const minItemSpacing = 22; // Minimum vertical space between items
+  // Get default style properties based on aesthetic type
+  const defaultStyle = getDefaultStyleForAesthetic(aesthetic);
   
   if (type === 'discrete') {
-    // Get domain values
-    const domain = scale.domain();
-    
-    // Track the current vertical position
-    let currentY = startY;
-    
-    // Create legend items for each discrete size value
-    domain.forEach((value, i) => {
-      const size = scale(value);
-      
-      // Create a group for this size item
-      const itemGroup = legend.append("g")
-        .attr("class", "size-legend-item")
-        .attr("transform", `translate(0, ${currentY})`);
-      
-      // Draw the appropriate size representation based on geometry type
-      let maxElementHeight = 0;
-      
-      if (primaryGeometry === 'point') {
-        if (shapeType === 'circle') {
-          // Calculate radius for circle
-          const radius = Math.sqrt(size / Math.PI);
-          
-          // Render circle with vertical alignment
-          itemGroup.append("circle")
-            .attr("cx", 8)
-            .attr("cy", 0)
-            .attr("r", radius)
-            .attr("fill", "steelblue")
-            .attr("stroke", "black")
-            .attr("stroke-width", 0.5);
-          
-          // Update max height needed for this item
-          maxElementHeight = Math.max(maxElementHeight, radius * 2);
-        } else {
-          // For other shapes
-          const symbolSize = size;
-          
-          itemGroup.append("path")
-            .attr("transform", `translate(8, 0)`)
-            .attr("d", d3.symbol().type(getSymbolType(shapeType)).size(symbolSize)())
-            .attr("fill", "steelblue")
-            .attr("stroke", "black")
-            .attr("stroke-width", 0.5);
-          
-          // Estimate height for non-circle symbols
-          maxElementHeight = Math.max(maxElementHeight, Math.sqrt(symbolSize / 40));
-        }
-      } else if (primaryGeometry === 'line') {
-        // For line thickness
-        const lineThickness = size / 5;
-        
-        itemGroup.append("line")
-          .attr("x1", 0)
-          .attr("y1", 0)
-          .attr("x2", 16)
-          .attr("y2", 0)
-          .attr("stroke", "steelblue")
-          .attr("stroke-width", lineThickness);
-        
-        maxElementHeight = Math.max(maxElementHeight, lineThickness);
-      }
-      
-      // Add text label
-      const textLabel = itemGroup.append("text")
-        .attr("x", 25)
-        .attr("y", 0)
-        .attr("font-size", "11px")
-        .attr("text-anchor", "start")
-        .attr("dominant-baseline", "middle")
-        .text(value);
-      
-      // Ensure we're accounting for text height too
-      try {
-        const textHeight = textLabel.node().getBBox().height;
-        maxElementHeight = Math.max(maxElementHeight, textHeight);
-      } catch (e) {
-        console.log("Error measuring text height:", e);
-      }
-      
-      // Ensure a minimum height and some padding
-      const itemHeight = Math.max(maxElementHeight, 15) + 5;
-      
-      // Update the position for the next item with adequate spacing
-      currentY += Math.max(itemHeight, minItemSpacing);
-    });
-    
-    return currentY;
-  } else {
-    // Continuous size scale - similar approach
-    const domain = scale.domain();
-    const niceValues = generateNiceValues(domain, 5);
-    
-    let currentY = startY;
-    
-    // Render each size value
-    niceValues.forEach((value, i) => {
-      const size = scale(value);
-      
-      // Create a group for this size item
-      const itemGroup = legend.append("g")
-        .attr("class", "size-legend-item")
-        .attr("transform", `translate(0, ${currentY})`);
-      
-      // Track the maximum height needed for this item
-      let maxElementHeight = 0;
-      
-      // Draw the size representation based on geometry type
-      if (primaryGeometry === 'point') {
-        if (shapeType === 'circle') {
-          const radius = Math.sqrt(size / Math.PI);
-          
-          itemGroup.append("circle")
-            .attr("cx", 8)
-            .attr("cy", 0)
-            .attr("r", radius)
-            .attr("fill", "steelblue")
-            .attr("stroke", "black")
-            .attr("stroke-width", 0.5);
-          
-          maxElementHeight = Math.max(maxElementHeight, radius * 2);
-        } else {
-          const symbolSize = size;
-          
-          itemGroup.append("path")
-            .attr("transform", `translate(8, 0)`)
-            .attr("d", d3.symbol().type(getSymbolType(shapeType)).size(symbolSize)())
-            .attr("fill", "steelblue")
-            .attr("stroke", "black")
-            .attr("stroke-width", 0.5);
-          
-          maxElementHeight = Math.max(maxElementHeight, Math.sqrt(symbolSize / 40));
-        }
-      } else if (primaryGeometry === 'line') {
-        const lineThickness = size / 5;
-        
-        itemGroup.append("line")
-          .attr("x1", 0)
-          .attr("y1", 0)
-          .attr("x2", 16)
-          .attr("y2", 0)
-          .attr("stroke", "steelblue")
-          .attr("stroke-width", lineThickness);
-        
-        maxElementHeight = Math.max(maxElementHeight, lineThickness);
-      }
-      
-      // Add text label
-      const textLabel = itemGroup.append("text")
-        .attr("x", 25)
-        .attr("y", 0)
-        .attr("font-size", "10px")
-        .attr("text-anchor", "start")
-        .attr("dominant-baseline", "middle")
-        .text(prettifyNumber(value));
-      
-      // Get text height
-      try {
-        const textHeight = textLabel.node().getBBox().height;
-        maxElementHeight = Math.max(maxElementHeight, textHeight);
-      } catch (e) {
-        console.log("Error measuring text height:", e);
-      }
-      
-      // Ensure minimum height and padding
-      const itemHeight = Math.max(maxElementHeight, 15) + 5;
-      
-      // Update position for next item
-      currentY += Math.max(itemHeight, minItemSpacing);
-    });
-    
-    return currentY;
-  }
-}
-
-/**
- * Renders an alpha (opacity) legend
- * Returns the new vertical position
- */
-function renderAlphaLegend(legend, scale, type, aesthetic, _instructions, startY) {
-  const primaryGeometry = determineGeometryType(_instructions);
-  const shapeType = determineShapeType(_instructions);
-  
-  if (type === 'discrete') {
-    // Get domain values
     const domain = scale.domain();
     let currentY = startY;
     
-    // Create legend items for each discrete value
     domain.forEach((value, i) => {
       const itemGroup = legend.append("g")
+        .attr("class", "legend-item")
         .attr("transform", `translate(0, ${currentY})`);
       
-      // Add opacity swatch using appropriate geometry
-      if (primaryGeometry === 'point') {
-        if (shapeType === 'circle') {
-          itemGroup.append("circle")
-            .attr("cx", 6)
-            .attr("cy", 0)
-            .attr("r", 6)
-            .attr("fill", "steelblue")
-            .attr("opacity", scale(value))
-            .attr("stroke", "black")
-            .attr("stroke-width", 0.5);
-        } else {
-          // For other shapes
-          itemGroup.append("path")
-            .attr("transform", `translate(6, 0)`)
-            .attr("d", d3.symbol().type(getSymbolType(shapeType)).size(100)())
-            .attr("fill", "steelblue")
-            .attr("opacity", scale(value))
-            .attr("stroke", "black")
-            .attr("stroke-width", 0.5);
-        }
-      } else {
-        // Default to rectangle for other geoms
-        itemGroup.append("rect")
-          .attr("x", 0)
-          .attr("y", -6)
-          .attr("width", 12)
-          .attr("height", 12)
-          .attr("fill", "steelblue")
-          .attr("opacity", scale(value))
-          .attr("stroke", "black")
-          .attr("stroke-width", 0.5);
-      }
+      // Render an appropriate visual based on the aesthetic type
+      renderAestheticSwatch(itemGroup, aesthetic, scale(value), primaryGeometry, shapeType, defaultStyle);
       
       // Add text label
       itemGroup.append("text")
-        .attr("x", 20)
+        .attr("x", 25)
         .attr("y", 0)
         .attr("font-size", "11px")
         .attr("text-anchor", "start")
@@ -903,57 +701,27 @@ function renderAlphaLegend(legend, scale, type, aesthetic, _instructions, startY
     
     return currentY;
   } else {
-    // Continuous alpha scale
-    // Create nice rounded values
+    // Continuous scale implementation
     const domain = scale.domain();
     const niceValues = generateNiceValues(domain, 5);
     let currentY = startY;
     
     niceValues.forEach((value, i) => {
-      const alpha = scale(value);
+      const itemGroup = legend.append("g")
+        .attr("class", "legend-item")
+        .attr("transform", `translate(0, ${currentY})`);
       
-      // Alpha swatch using appropriate geometry
-      if (primaryGeometry === 'point') {
-        if (shapeType === 'circle') {
-          legend.append("circle")
-            .attr("cx", 6)
-            .attr("cy", currentY)
-            .attr("r", 6)
-            .attr("fill", "steelblue")
-            .attr("opacity", alpha)
-            .attr("stroke", "black")
-            .attr("stroke-width", 0.5);
-        } else {
-          // For other shapes
-          legend.append("path")
-            .attr("transform", `translate(6, ${currentY})`)
-            .attr("d", d3.symbol().type(getSymbolType(shapeType)).size(100)())
-            .attr("fill", "steelblue")
-            .attr("opacity", alpha)
-            .attr("stroke", "black")
-            .attr("stroke-width", 0.5);
-        }
-      } else {
-        // Default rectangle for other geoms
-        legend.append("rect")
-          .attr("x", 0)
-          .attr("y", currentY - 6)
-          .attr("width", 12)
-          .attr("height", 12)
-          .attr("fill", "steelblue")
-          .attr("opacity", alpha)
-          .attr("stroke", "black")
-          .attr("stroke-width", 0.5);
-      }
+      // Render appropriate swatch based on aesthetic
+      renderAestheticSwatch(itemGroup, aesthetic, scale(value), primaryGeometry, shapeType, defaultStyle);
       
-      // Text label with formatted alpha value
-      legend.append("text")
-        .attr("x", 20)
-        .attr("y", currentY)
+      // Add text label with formatted value
+      itemGroup.append("text")
+        .attr("x", 25)
+        .attr("y", 0)
         .attr("font-size", "10px")
         .attr("text-anchor", "start")
         .attr("dominant-baseline", "middle")
-        .text(`${prettifyNumber(value)} (${alpha.toFixed(2)})`);
+        .text(`${prettifyNumber(value)}`);
       
       currentY += 20;
     });
@@ -962,7 +730,92 @@ function renderAlphaLegend(legend, scale, type, aesthetic, _instructions, startY
   }
 }
 
-// Helper functions
+/**
+ * Renders a swatch appropriate for the given aesthetic
+ */
+function renderAestheticSwatch(group, aesthetic, value, geometry, shapeType, defaultStyle) {
+  switch(aesthetic) {
+    case 'alpha':
+      group.append("rect")
+        .attr("x", 0)
+        .attr("y", -8)
+        .attr("width", 16)
+        .attr("height", 16)
+        .attr("fill", defaultStyle.fill)
+        .attr("opacity", value)
+        .attr("stroke", "black")
+        .attr("stroke-width", 0.5);
+      break;
+    
+    case 'strokeWidth':
+      group.append("circle")
+        .attr("cx", 8)
+        .attr("cy", 0)
+        .attr("r", 8)
+        .attr("fill", "none")
+        .attr("stroke", defaultStyle.stroke)
+        .attr("stroke-width", value);
+      break;
+    
+    default:
+      // Generic swatch
+      group.append("rect")
+        .attr("x", 0)
+        .attr("y", -8)
+        .attr("width", 16)
+        .attr("height", 16)
+        .attr("fill", defaultStyle.fill)
+        .attr("stroke", "black")
+        .attr("stroke-width", 0.5);
+  }
+}
+
+/**
+ * Returns default style properties for an aesthetic for legend rendering
+ */
+function getDefaultStyleForAesthetic(aesthetic) {
+  switch(aesthetic) {
+    case 'alpha':
+      return { fill: "steelblue", stroke: "black" };
+    case 'strokeWidth':
+      return { fill: "none", stroke: "steelblue" };
+    // Add more aesthetics as needed
+    default:
+      return { fill: "steelblue", stroke: "black" };
+  }
+}
+
+// Helper functions to measure different types of legends
+function measureColorLegendItems(legend, scale, type, aesthetic, _instructions, startY) {
+  if (type === 'discrete') {
+    const domain = scale.domain();
+    const itemCount = domain.length;
+    const itemHeight = itemCount * 20;
+    return { itemHeight, itemWidth: 100 }; // Narrower width estimate
+  } else {
+    return { itemHeight: 100, itemWidth: 70 }; // Narrower width for gradient
+  }
+}
+
+function measureSizeLegendItems(legend, scale, type, aesthetic, _instructions, startY) {
+  const domain = scale.domain();
+  
+  if (type === 'discrete') {
+    const itemCount = domain.length;
+    return { itemHeight: itemCount * 25, itemWidth: 80 }; // Narrower width
+  } else {
+    return { itemHeight: 120, itemWidth: 80 }; // Narrower width
+  }
+}
+
+function measureGenericLegendItems(legend, scale, type, aesthetic, _instructions, startY) {
+  if (type === 'discrete') {
+    const domain = scale.domain();
+    return { itemHeight: domain.length * 20, itemWidth: 80 }; // Narrower width
+  } else {
+    return { itemHeight: 100, itemWidth: 80 }; // Narrower width
+  }
+}
 
 /**
  * Generates aesthetically pleasing, evenly spaced, rounded values for legends

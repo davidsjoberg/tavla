@@ -1,4 +1,5 @@
 import { calculateLegendSpace } from './legend.js';
+import * as legend from './legend.js';
 
 export { plot_panel, render_titles, measureTitleHeight };
 export { small_grid };
@@ -80,42 +81,72 @@ function measureTitleHeight(_instructions, _plot_width) {
     return totalHeight + 10; // Extra padding at the bottom
 }
 
+/**
+ * Calculate panel dimensions with more accurate legend sizing
+ */
 function panel_dimensions(_plot_width, _instructions) {
-    // Calculate title space based on actual rendered titles
-    const titleHeight = _instructions ? measureTitleHeight(_instructions, _plot_width) : 0;
+  // Extract title information
+  const titleHeight = _instructions.labels ? measureTitleHeight(_instructions, _plot_width) : 0;
+  
+  // Calculate legend space requirements with intelligent layout
+  const legendSpace = legend.calculateLegendSpace(_instructions);
+  
+  // Store legend layout in instructions for later use
+  _instructions.legendLayout = {
+    layout: legendSpace.layout,
+    width: legendSpace.width,
+    height: legendSpace.height,
+    columns: legendSpace.columns,
+    columnWidths: legendSpace.columnWidths,
+    columnSpacing: legendSpace.columnSpacing || 12,
+    itemsPerColumn: legendSpace.itemsPerColumn
+  };
+  
+  // Basic margins
+  let marginTop = _plot_width * 0.02 + titleHeight;
+  let marginRight = _plot_width * 0.06;  // Default small right margin
+  let marginBottom = _plot_width * 0.08;
+  let marginLeft = _plot_width * 0.08;
+  
+  // Initialize plot dimensions
+  let effectivePlotWidth = _plot_width;
+  let effectivePlotHeight = _plot_width / 1.6;
+  
+  // Calculate legend width with fixed padding
+  const legendPadding = 20;  // Fixed padding between plot and legend
+  
+  // For legends, calculate actual width needed
+  if (legendSpace.layout === 'none') {
+    // No legends, use full width
+    marginRight = _plot_width * 0.06; // Just standard margin
+  } else {
+    // Calculate actual width needed for legends (width + fixed padding)
+    const legendWidthNeeded = legendSpace.width + legendPadding;
     
-    // Calculate legend space if needed
-    const legendSpace = _instructions ? calculateLegendSpace(_instructions) : { width: 0, height: 0 };
-    const legendWidth = legendSpace.width;
+    // Ensure we don't allocate excessive space for legends
+    // Cap legend width at 1/3 of total width to ensure plot isn't too squeezed
+    const maxLegendWidth = _plot_width * 0.33;
+    const actualLegendWidth = Math.min(legendWidthNeeded, maxLegendWidth);
     
-    // Use consistent margins with dynamically calculated title and legend space
-    const margins = {
-        top: _plot_width * 0.02 + titleHeight, // Add measured titleHeight to top margin
-        right: _plot_width * 0.06 + (legendWidth > 0 ? legendWidth + 30 : 0), // Add space for legend + padding if needed
-        bottom: _plot_width * 0.08,
-        left: _plot_width * 0.08
-    };
-    
-    // Calculate total width including legend area
-    const totalWidth = _plot_width + (legendWidth > 0 ? legendWidth + 30 : 0);
-    
-    // Dimensions
-    let dimensions = {
-        width: totalWidth,
-        height: _plot_width / 1.6 + titleHeight,
-        marginTop: margins.top,
-        marginRight: margins.right,
-        marginBottom: margins.bottom,
-        marginLeft: margins.left,
-        titleHeight: titleHeight,
-        legendSpace: legendSpace
-    };
-    
-    // Content area dimensions (subtract margins)
-    dimensions.ctrWidth = _plot_width - margins.left - margins.right + legendWidth;
-    dimensions.ctrHeight = dimensions.height - margins.top - margins.bottom;
-
-    return dimensions;
+    // Set right margin to ensure legend fits
+    marginRight = actualLegendWidth;
+  }
+  
+  // Calculate center area dimensions
+  const ctrWidth = _plot_width - marginLeft - marginRight;
+  const ctrHeight = effectivePlotHeight - marginTop - marginBottom;
+  
+  return {
+    width: _plot_width,
+    height: effectivePlotHeight + titleHeight,
+    marginTop: marginTop,
+    marginRight: marginRight,
+    marginBottom: marginBottom,
+    marginLeft: marginLeft,
+    titleHeight: titleHeight,
+    ctrWidth: ctrWidth,
+    ctrHeight: ctrHeight
+  };
 }
 
 function render_titles(_svg, _instructions) {

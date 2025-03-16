@@ -1,0 +1,38 @@
+/* Legend container styles */
+.legends-container {
+  font-family: Arial, sans-serif;
+}
+
+/* Legend titles */
+.legend-title {
+  font-weight: 600;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+/* Legend items */
+.legend-item {
+  margin-bottom: 6px;
+}
+
+/* Text styling in legends */
+.legend-item text {
+  font-size: 11px;
+}
+
+/* Ensure consistent text alignment */
+.legend-item text {
+  dominant-baseline: middle;
+}
+
+/* For multi-column legends */
+.legend-column {
+  display: inline-block;
+  vertical-align: top;
+}
+
+/* Continuous color gradient */
+.continuous-gradient rect {
+  stroke: #333;
+  stroke-width: 0.5px;
+}

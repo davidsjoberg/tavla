@@ -1,4 +1,6 @@
 import { dirigent } from "./dirigent.js";
+import { renderScaleExamples } from './examples/scale_examples.js';
+import { renderAdvancedScalesExamples } from './examples/advanced_scales.js';
 
 // ===== DATA GENERATORS =====
 
@@ -611,3 +613,39 @@ const bar4Config = {
 };
 dirigent("#bar4", bar4Config, 700, "bar4");
 displayDescription("bar4-code", bar4Config);
+
+// At the end of the file, add a new section for scale examples
+const scalesSection = document.createElement('div');
+scalesSection.className = 'section';
+scalesSection.id = 'scales-section';
+
+const scalesTitle = document.createElement('h2');
+scalesTitle.textContent = 'Color & Size Scales';
+scalesSection.appendChild(scalesTitle);
+
+const scalesContainer = document.createElement('div');
+scalesContainer.id = 'scales-examples';
+scalesSection.appendChild(scalesContainer);
+
+document.body.appendChild(scalesSection);
+
+// Render the scale examples
+renderScaleExamples('scales-examples');
+
+// After the existing scales section, add a new section for advanced scales
+const advancedScalesSection = document.createElement('div');
+advancedScalesSection.className = 'section';
+advancedScalesSection.id = 'advanced-scales-section';
+
+const advancedScalesTitle = document.createElement('h2');
+advancedScalesTitle.textContent = 'Advanced Custom Scales';
+advancedScalesSection.appendChild(advancedScalesTitle);
+
+const advancedScalesContainer = document.createElement('div');
+advancedScalesContainer.id = 'advanced-scales-examples';
+advancedScalesSection.appendChild(advancedScalesContainer);
+
+document.body.appendChild(advancedScalesSection);
+
+// Render the advanced scale examples
+renderAdvancedScalesExamples('advanced-scales-examples');

@@ -17,7 +17,7 @@ function render_layer(_svg, _instructions) {
 
             // Render the layer
             handler(_svg, layer, _instructions, layerInfo, scalesAndTypes);
-            const numPoints = 20;
+            const numPoints = 6;
             const occupiedGridPoints = sup.getPointsAlongPaths(_svg, layerId, numPoints);
             _instructions.layers[layer].pointspace = occupiedGridPoints
             console.log(occupiedGridPoints);

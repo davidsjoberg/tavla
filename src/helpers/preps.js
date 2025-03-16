@@ -170,9 +170,6 @@ function prepare_extended_instructions(_instructions) {
         /////////// EXTEND INSTRUCTIONS ////////////
         _instructions.layers[layer].delegations = delegates;
         _instructions.layers[layer].accessors = accessors;
-        // _instructions.layers[layer].scales = Object.fromEntries(
-        //     Object.entries(_scale_functions)
-        // );
     }
 
     return _instructions;

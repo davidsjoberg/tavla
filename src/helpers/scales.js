@@ -1,4 +1,4 @@
-export { scale_expand, make_scales_to_bindings };
+export { scale_expand, make_scales_to_bindings, updateScaleRanges };
 
 function make_scales_to_bindings(_instructions) {
   const { bindings, data, dimensions } = _instructions;
@@ -130,6 +130,28 @@ function make_scales_to_bindings(_instructions) {
   // Add scales and scaleTypes to _instructions
   _instructions.scalesAndTypes = scalesAndTypes;
 
+  return _instructions;
+}
+
+/**
+ * Updates the range of existing scales when dimensions change
+ */
+function updateScaleRanges(_instructions) {
+  const { scalesAndTypes, dimensions } = _instructions;
+  
+  // Update each scale's range based on the new dimensions
+  for (const key in scalesAndTypes) {
+    const scaleObj = scalesAndTypes[key];
+    
+    // Only update position scales (x and y)
+    if (key === 'x' && scaleObj.scale.range) {
+      scaleObj.scale.range([0, dimensions.ctrWidth]);
+    }
+    else if (key === 'y' && scaleObj.scale.range) {
+      scaleObj.scale.range([dimensions.ctrHeight, 0]);
+    }
+  }
+  
   return _instructions;
 }
 

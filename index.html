@@ -33,7 +33,7 @@
             background-color: white;
             border-radius: 8px;
             padding: 5px;
-            width: 700px;
+            width: 820px; /* Increased from 700px */
             box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
         }
         
@@ -68,6 +68,16 @@
             fill: black;
             font-weight: normal;
             font-size: 11px;
+        }
+
+        /* Legend styles */
+        .legends-container {
+            font-family: Arial, sans-serif;
+        }
+        
+        .legend-title {
+            font-weight: 600;
+            font-size: 12px;
         }
     </style>
 </head>
@@ -119,6 +129,10 @@
     <!-- Bar Chart Section -->
     <div class="section" id="bar-section">
         <h2>Bar Charts</h2>
+        <div class="example-row">
+            <div class="viz-container" id="bar0"></div>
+            <pre class="code-container" id="bar0-code"></pre>
+        </div>
         <div class="example-row">
             <div class="viz-container" id="bar1"></div>
             <pre class="code-container" id="bar1-code"></pre>

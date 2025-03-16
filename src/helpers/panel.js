@@ -1,6 +1,8 @@
-export{plot_panel, render_titles, measureTitleHeight}
-export {small_grid};
-export {panel_dimensions};
+import { calculateLegendSpace } from './legend.js';
+
+export { plot_panel, render_titles, measureTitleHeight };
+export { small_grid };
+export { panel_dimensions };
 
 function small_grid(A, domain) {
     let middle_pos = []
@@ -82,27 +84,36 @@ function panel_dimensions(_plot_width, _instructions) {
     // Calculate title space based on actual rendered titles
     const titleHeight = _instructions ? measureTitleHeight(_instructions, _plot_width) : 0;
     
-    // Use consistent margins with dynamically calculated title space
+    // Calculate legend space if needed
+    const legendSpace = _instructions ? calculateLegendSpace(_instructions) : { width: 0, height: 0 };
+    const legendWidth = legendSpace.width;
+    
+    // Use consistent margins with dynamically calculated title and legend space
     const margins = {
         top: _plot_width * 0.02 + titleHeight, // Add measured titleHeight to top margin
-        right: _plot_width * 0.06,    // 6% of width
-        bottom: _plot_width * 0.08,   // 8% of width
-        left: _plot_width * 0.08      // 8% of width
+        right: _plot_width * 0.06 + (legendWidth > 0 ? legendWidth + 30 : 0), // Add space for legend + padding if needed
+        bottom: _plot_width * 0.08,
+        left: _plot_width * 0.08
     };
+    
+    // Calculate total width including legend area
+    const totalWidth = _plot_width + (legendWidth > 0 ? legendWidth + 30 : 0);
     
     // Dimensions
     let dimensions = {
-        width: _plot_width,
-        height: _plot_width / 1.6 + titleHeight, // Add titleHeight to overall height
+        width: totalWidth,
+        height: _plot_width / 1.6 + titleHeight,
         marginTop: margins.top,
         marginRight: margins.right,
         marginBottom: margins.bottom,
         marginLeft: margins.left,
-        titleHeight: titleHeight    // Store title height for positioning
+        titleHeight: titleHeight,
+        legendSpace: legendSpace
     };
     
-    dimensions.ctrWidth = dimensions.width - dimensions.marginLeft - dimensions.marginRight;
-    dimensions.ctrHeight = dimensions.height - dimensions.marginTop - dimensions.marginBottom;
+    // Content area dimensions (subtract margins)
+    dimensions.ctrWidth = _plot_width - margins.left - margins.right + legendWidth;
+    dimensions.ctrHeight = dimensions.height - margins.top - margins.bottom;
 
     return dimensions;
 }

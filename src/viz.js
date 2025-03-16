@@ -15,19 +15,33 @@ function generateScatterData(pointCount = 25) {
   }));
 }
 
-// Function to generate line chart data
+// Updated line data generator for more diverse, crossing lines
 function generateLineData() {
   const lineData = [];
   const products = ['Product A', 'Product B', 'Product C'];
   const styles = ['solid', 'dashed', 'dotted'];
   
+  // Different starting points and growth patterns
+  const startValues = [60, 100, 40];
+  const growthFactors = [0.15, 0.08, 0.20];
+  
   products.forEach((product, idx) => {
-    let sales = 80 + Math.random() * 20;
+    let sales = startValues[idx]; // Different starting points
+    
     for (let year = 2010; year <= 2020; year++) {
-      sales = sales * (1 + Math.random() * 0.1 + idx * 0.02) + (Math.random() * 15 - 5);
+      // More dramatic variations to ensure crossing
+      const noise = Math.random() * 20 - 10;
+      const cyclicalComponent = Math.sin((year - 2010) * (0.8 + idx * 0.2)) * (10 + idx * 5);
+      
+      // Apply growth with varying rates and noise
+      sales = sales * (1 + growthFactors[idx] * Math.random()) + noise + cyclicalComponent;
+      
+      // Ensure reasonable values
+      sales = Math.max(20, Math.min(200, sales));
+      
       lineData.push({
         year: year,
-        sales: Math.max(10, Math.round(sales)),
+        sales: Math.round(sales),
         product: product,
         lineStyle: styles[idx],
       });
@@ -35,6 +49,15 @@ function generateLineData() {
   });
   
   return lineData;
+}
+
+// New simple bar data function (no subgroups)
+function generateSimpleBarData() {
+  const categories = ['A', 'B', 'C', 'D', 'E', 'F'];
+  return categories.map(category => ({
+    category,
+    value: 25 + Math.floor(Math.random() * 75) // Values between 25-100
+  }));
 }
 
 // Function to generate bar chart data
@@ -230,8 +253,8 @@ const scatter4Config = {
   data: scatter4Data,
   bindings: {
     x: "x",
-    y: "y",
-    size: "value"
+    y: "y"
+    // No extra bindings that would create legends
   },
   labels: {
     x: "X Value",
@@ -242,7 +265,8 @@ const scatter4Config = {
     circles: {
       geometry: "point",
       attributes: {
-        color: "#1f77b4",
+        size: 100,
+        color: "#1f77b4", 
         stroke: "#333",
         strokeWidth: 1.5,
         alpha: 0.7
@@ -424,6 +448,35 @@ dirigent("#line4", line4Config, 700, "line4");
 displayDescription("line4-code", line4Config);
 
 // ===== BAR CHART EXAMPLES =====
+
+// Add a new bar chart example for simple bars (no subgroups)
+const simpleBarData = generateSimpleBarData();
+const simpleBarConfig = {
+  data: simpleBarData,
+  bindings: {
+    x: "category",
+    y: "value"
+  },
+  labels: {
+    x: "Category",
+    y: "Value",
+    title: "Simple Bar Chart"
+  },
+  layers: {
+    bars: {
+      geometry: "bar",
+      attributes: {
+        type: "dodge", // Only one bar per category, but using dodge type
+        alpha: 0.8,
+        color: "#4e79a7", // Fixed color since no color binding
+        stroke: "white",
+        strokeWidth: 1
+      }
+    }
+  }
+};
+dirigent("#bar0", simpleBarConfig, 700, "bar0");
+displayDescription("bar0-code", simpleBarConfig);
 
 // Example 1: Grouped Bar Chart
 const bar1Data = generateBarData();

@@ -1,8 +1,13 @@
 import * as textUtils from './text_utils.js';
 
-export {geomDatabase};
+export {
+  geomDatabase,
+  getGeometryScaleConfig,
+  getLegendRepresentation,
+  getGeometryMargins
+};
 
-// Binding rules
+// Database of geometry specifications
 const geomDatabase = {
     point: {
         // Binding rules
@@ -139,6 +144,56 @@ const geomDatabase = {
             } else {
                 geomPoints.attr('opacity', 0.7);
             }
+        },
+        
+        // Scale adjustment configuration
+        scale_config: {
+            padding: {
+                x: 0.05,    // 5% padding on both sides of x-axis
+                y: 0.05     // 5% padding on both sides of y-axis
+            },
+            useNice: false, // Don't use nice() for scatter plots to prevent overexpansion
+            enforceZero: false // Don't force y-axis to include zero
+        },
+        
+        // Legend representation configuration
+        legend_representation: {
+            discrete: (value, color, attributes) => {
+                const shape = attributes.shape || 'circle';
+                if (shape === 'circle') {
+                    return {
+                        type: 'circle',
+                        attrs: {
+                            cx: 6,
+                            cy: 0,
+                            r: 6,
+                            fill: color,
+                            stroke: 'black',
+                            'stroke-width': 0.5
+                        }
+                    };
+                } else {
+                    return {
+                        type: 'path',
+                        attrs: {
+                            transform: 'translate(6, 0)',
+                            d: getSymbolPath(shape, 100),
+                            fill: color,
+                            stroke: 'black',
+                            'stroke-width': 0.5
+                        }
+                    };
+                }
+            },
+            continuous: (min, max, scale, attributes) => {
+                // Configuration for continuous scales in legends
+                return {
+                    type: 'gradient',
+                    height: 100,
+                    width: 20,
+                    valuePlacement: 'right'
+                };
+            }
         }
     },
     
@@ -259,6 +314,54 @@ const geomDatabase = {
             } else {
                 geomLines.attr('opacity', 0.9);
             }
+        },
+        
+        // Scale adjustment configuration
+        scale_config: {
+            padding: {
+                x: 0.05,    // 5% padding on x-axis
+                y: 0.05     // 5% padding on y-axis
+            },
+            useNice: true,  // Use nice() for better tick placement
+            enforceZero: false // Don't force y-axis to include zero
+        },
+        
+        // Legend representation configuration
+        legend_representation: {
+            discrete: (value, color, attributes) => {
+                const lineType = attributes.lineType;
+                const strokeDash = getStrokeDashArray(lineType);
+                
+                return {
+                    type: 'line',
+                    attrs: {
+                        x1: 0,
+                        y1: 0,
+                        x2: 20, 
+                        y2: 0,
+                        stroke: color,
+                        'stroke-width': (attributes.size || 2) * 1.2,
+                        'stroke-dasharray': strokeDash
+                    },
+                    withPoint: attributes.withPoints === true,
+                    pointAttrs: attributes.withPoints === true ? {
+                        cx: 10,
+                        cy: 0,
+                        r: 4,
+                        fill: color,
+                        stroke: attributes.pointStroke || 'black',
+                        'stroke-width': 0.8
+                    } : null
+                };
+            },
+            continuous: (min, max, scale, attributes) => {
+                return {
+                    type: 'gradient',
+                    height: 100,
+                    width: 20,
+                    valuePlacement: 'right'
+                };
+            }
         }
     },
     
@@ -360,6 +463,41 @@ const geomDatabase = {
             } else {
                 textElements.attr('opacity', 0.85);
             }
+        },
+        
+        // Scale adjustment configuration
+        scale_config: {
+            padding: {
+                x: 0.08,    // 8% padding on x-axis
+                y: 0.08     // 8% padding on y-axis
+            },
+            useNice: true,  // Use nice() for better tick placement
+            enforceZero: false // Don't force y-axis to include zero
+        },
+        
+        // Legend representation configuration
+        legend_representation: {
+            discrete: (value, color, attributes) => {
+                return {
+                    type: 'text',
+                    attrs: {
+                        x: 6,
+                        y: 0,
+                        'text-anchor': 'middle',
+                        fill: color,
+                        'font-size': attributes.size || 12
+                    },
+                    text: 'T'
+                };
+            },
+            continuous: (min, max, scale, attributes) => {
+                return {
+                    type: 'gradient',
+                    height: 100,
+                    width: 20,
+                    valuePlacement: 'right'
+                };
+            }
         }
     },
     
@@ -434,8 +572,14 @@ const geomDatabase = {
                 // Calculate a small adjustment to prevent bars from touching the axis
                 const axisBuffer = 2; // 2px buffer for more space
                 
-                // Get unique color values to create subgroups
-                const colorValues = [...new Set(layer_data.map(d => accessors.color(d)))];
+                // Check if color is bound to data, otherwise use a single category
+                // This fixes the issue with simple bar charts that have no color binding
+                let colorValues;
+                if (accessors.color) {
+                    colorValues = [...new Set(layer_data.map(d => accessors.color(d)))];
+                } else {
+                    colorValues = ['default']; // Use a single default when no color binding
+                }
                 
                 // Create a scale for bar positioning within group
                 const barPadding = attributes.barPadding !== undefined ? attributes.barPadding : 0.05;
@@ -448,29 +592,55 @@ const geomDatabase = {
                 const data = []; // Collect all bar data first instead of appending directly
                 
                 groupedBarData.forEach((categoryData, category) => {
-                    categoryData.forEach(d => {
-                        const colorValue = accessors.color(d);
-                        const yValue = accessors.y(d);
-                        const barY = yValue >= 0 ? scalesAndTypes.y.scale(yValue) : zeroY;
-                        const barHeight = Math.abs(zeroY - scalesAndTypes.y.scale(yValue));
-                        
-                        // Ensure positive bars don't touch the x-axis
-                        const adjustedHeight = yValue >= 0 ? 
-                            Math.max(0, barHeight - axisBuffer) : barHeight;
-                        
-                        data.push({
-                            x: scalesAndTypes.x.scale(category) + subgroupScale(colorValue),
-                            y: barY,
-                            width: subgroupScale.bandwidth(),
-                            height: adjustedHeight,
-                            color: var_bindings.includes('color') ? 
-                                scalesAndTypes.color.scale(colorValue) : 'steelblue',
-                            stroke: attributes.stroke || 'none',
-                            strokeWidth: attributes.strokeWidth || 1,
-                            opacity: attributes.alpha || 0.8,
-                            originalData: d
+                    if (colorValues.length === 1 && colorValues[0] === 'default') {
+                        // Handle simple bar chart case with no color binding
+                        categoryData.forEach(d => {
+                            const yValue = accessors.y(d);
+                            const barY = yValue >= 0 ? scalesAndTypes.y.scale(yValue) : zeroY;
+                            const barHeight = Math.abs(zeroY - scalesAndTypes.y.scale(yValue));
+                            
+                            // Ensure positive bars don't touch the x-axis
+                            const adjustedHeight = yValue >= 0 ? 
+                                Math.max(0, barHeight - axisBuffer) : barHeight;
+                            
+                            data.push({
+                                x: scalesAndTypes.x.scale(category),
+                                y: barY,
+                                width: scalesAndTypes.x.scale.bandwidth(),
+                                height: adjustedHeight,
+                                color: attributes.color || 'steelblue',
+                                stroke: attributes.stroke || 'none',
+                                strokeWidth: attributes.strokeWidth || 1,
+                                opacity: attributes.alpha || 0.8,
+                                originalData: d
+                            });
                         });
-                    });
+                    } else {
+                        // Handle grouped bar chart case with color binding
+                        categoryData.forEach(d => {
+                            const colorValue = accessors.color ? accessors.color(d) : 'default';
+                            const yValue = accessors.y(d);
+                            const barY = yValue >= 0 ? scalesAndTypes.y.scale(yValue) : zeroY;
+                            const barHeight = Math.abs(zeroY - scalesAndTypes.y.scale(yValue));
+                            
+                            // Ensure positive bars don't touch the x-axis
+                            const adjustedHeight = yValue >= 0 ? 
+                                Math.max(0, barHeight - axisBuffer) : barHeight;
+                            
+                            data.push({
+                                x: scalesAndTypes.x.scale(category) + subgroupScale(colorValue),
+                                y: barY,
+                                width: subgroupScale.bandwidth(),
+                                height: adjustedHeight,
+                                color: var_bindings.includes('color') && accessors.color ? 
+                                    scalesAndTypes.color.scale(colorValue) : (attributes.color || 'steelblue'),
+                                stroke: attributes.stroke || 'none',
+                                strokeWidth: attributes.strokeWidth || 1,
+                                opacity: attributes.alpha || 0.8,
+                                originalData: d
+                            });
+                        });
+                    }
                 });
                 
                 // Add all bars at once to avoid stray lines
@@ -557,6 +727,145 @@ const geomDatabase = {
             }
             
             return barGroups;
+        },
+        
+        // Scale adjustment configuration
+        scale_config: {
+            padding: {
+                x: 0.01,    // 1% padding on x-axis
+                y: 0.05     // 5% padding on y-axis
+            },
+            useNice: true,   // Use nice() for better tick placement
+            enforceZero: true // Force y-axis to include zero
+        },
+        
+        // Legend representation configuration
+        legend_representation: {
+            discrete: (value, color, attributes) => {
+                return {
+                    type: 'rect',
+                    attrs: {
+                        x: 0,
+                        y: -6,
+                        width: 12,
+                        height: 12,
+                        fill: color,
+                        stroke: attributes.stroke || 'black',
+                        'stroke-width': 0.5
+                    }
+                };
+            },
+            continuous: (min, max, scale, attributes) => {
+                return {
+                    type: 'gradient',
+                    height: 100,
+                    width: 20,
+                    valuePlacement: 'right'
+                };
+            }
         }
     }
 };
+
+/**
+ * Returns the scale configuration for a given geometry type
+ */
+function getGeometryScaleConfig(geometryType) {
+    const defaultConfig = {
+        padding: { x: 0.05, y: 0.05 },
+        useNice: true,
+        enforceZero: false
+    };
+    
+    if (!geometryType || !geomDatabase[geometryType]) {
+        return defaultConfig;
+    }
+    
+    return geomDatabase[geometryType].scale_config || defaultConfig;
+}
+
+/**
+ * Returns the legend representation for a given geometry type
+ */
+function getLegendRepresentation(geometryType, isDiscrete, value, color, attributes) {
+    if (!geometryType || !geomDatabase[geometryType]) {
+        // Default representation is a colored rectangle
+        return {
+            type: 'rect',
+            attrs: {
+                x: 0,
+                y: -6,
+                width: 12,
+                height: 12,
+                fill: color,
+                stroke: 'black',
+                'stroke-width': 0.5
+            }
+        };
+    }
+    
+    const legendConfig = geomDatabase[geometryType].legend_representation;
+    if (!legendConfig) return null;
+    
+    if (isDiscrete && legendConfig.discrete) {
+        return legendConfig.discrete(value, color, attributes || {});
+    } else if (!isDiscrete && legendConfig.continuous) {
+        return legendConfig.continuous(value, color, attributes || {});
+    }
+    
+    return null;
+}
+
+/**
+ * Returns margin specifications for a given geometry type
+ */
+function getGeometryMargins(geometryType) {
+    const defaultMargins = {
+        top: 0.02,
+        right: 0.06,
+        bottom: 0.08,
+        left: 0.08
+    };
+    
+    if (!geometryType || !geomDatabase[geometryType]) {
+        return defaultMargins;
+    }
+    
+    return geomDatabase[geometryType].margin_specs || defaultMargins;
+}
+
+/**
+ * Gets the stroke-dasharray value for a line type
+ */
+function getStrokeDashArray(lineType) {
+  switch(lineType) {
+    case 'dashed':
+      return "5,5";
+    case 'dotted':
+      return "1,3";
+    case 'dashdot':
+      return "10,5,2,5";
+    default:
+      return null; // Solid line
+  }
+}
+
+/**
+ * Gets the d3 symbol path for a given shape
+ */
+function getSymbolPath(shape, size) {
+  const symbolMap = {
+    'circle': d3.symbolCircle,
+    'cross': d3.symbolCross,
+    'diamond': d3.symbolDiamond,
+    'square': d3.symbolSquare,
+    'star': d3.symbolStar,
+    'triangle': d3.symbolTriangle,
+    'wye': d3.symbolWye
+  };
+  
+  const symbolFunc = symbolMap[shape] || d3.symbolCircle;
+  return d3.symbol().type(symbolFunc).size(size)();
+}
+
+// ...rest of existing helper functions...

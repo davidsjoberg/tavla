@@ -15,6 +15,18 @@ function dirigent(_div, _instructions, _plot_width, _plotId) {
     // Step 2: Create scales and prepare data
     _instructions = preps.transform_data(_instructions);
     _instructions = scales.make_scales_to_bindings(_instructions);
+    
+    // After creating scales, ensure extents exists:
+    if (!_instructions.extents) {
+        console.warn("Missing extents after scale creation - creating fallback");
+        _instructions.extents = {
+            xDataMin: 0, 
+            xDataMax: 100,
+            yDataMin: 0, 
+            yDataMax: 100
+        };
+    }
+    
     _instructions = preps.prepare_extended_instructions(_instructions);
     
     // Step 3: Calculate dimensions with intelligent legend layout

@@ -593,23 +593,6 @@ const bar4Config = {
         groupPadding: 0.1,
         barPadding: 0.05
       }
-    },
-    labels: {
-      geometry: "text",
-      bindings: {
-        x: "category",
-        y: "value",
-        text: "value",
-        color: "subgroup"
-      },
-      attributes: {
-        color: "black",
-        size: 10,
-        barType: "dodge",
-        groupPadding: 0.1,
-        barPadding: 0.05,
-        yOffset: -5
-      }
     }
   }
 };

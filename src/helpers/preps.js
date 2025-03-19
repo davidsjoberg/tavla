@@ -145,6 +145,10 @@ function prepare_extended_instructions(_instructions) {
         
         function createAccessors(data, bindings) {
             const accessors = {};
+            // Instead of using data[0], find a row that has defined values for each binding.
+            const sample = data.find(d =>
+                Object.values(bindings).every(key => d[key] !== undefined)
+            ) || data[0];
             
             for (const key in bindings) {
                 const value = bindings[key];
@@ -154,7 +158,7 @@ function prepare_extended_instructions(_instructions) {
             return accessors;
         }
         
-        const accessors = createAccessors(_instructions.data[0], filteredBindings);
+        const accessors = createAccessors(_instructions.data, filteredBindings);
         
         /////////// EXTEND INSTRUCTIONS ////////////
         _instructions.layers[layer].delegations = delegates;

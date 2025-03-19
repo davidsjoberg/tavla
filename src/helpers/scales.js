@@ -210,6 +210,17 @@ function make_scales_to_bindings(_instructions) {
       isNumeric
     };
   };
+
+  // Insert this block (e.g., at the beginning of make_scales_to_bindings) to compute extents if undefined:
+  if (!_instructions.extents) {
+    _instructions.extents = {
+        xDataMin: d3.min(_instructions.data, d => +d[_instructions.bindings.x]),
+        xDataMax: d3.max(_instructions.data, d => +d[_instructions.bindings.x]),
+        yDataMin: d3.min(_instructions.data, d => +d[_instructions.bindings.y]),
+        yDataMax: d3.max(_instructions.data, d => +d[_instructions.bindings.y])
+    };
+    console.log("Computed extents:", _instructions.extents);
+  }
   
   // Process each binding to create appropriate scales
   for (const key in _instructions.bindings) {

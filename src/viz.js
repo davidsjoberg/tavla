@@ -391,7 +391,9 @@ const line3Config = {
       },
       attributes: {
         size: 10,
-        alpha: 0.8
+        alpha: 0.8,
+        yOffset: -9,
+        xOffset: "20px"
       }
     }
   }

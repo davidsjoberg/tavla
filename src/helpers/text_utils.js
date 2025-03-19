@@ -1,27 +1,72 @@
-/**
- * Text positioning utilities for better label placement
- */
+import * as sizeUtils from './size_utils.js';
 
 export { calculateTextPosition };
 
+/**
+ * Parse position offset value
+ * @param {string|number} value - Offset value (e.g., "5px", "2mm", 50)
+ * @return {Object} Parsed offset with value and unit type
+ */
+function parseOffset(value) {
+    if (value === undefined || value === null) return { value: 0, unit: 'data' };
+    
+    // If number, assume data units
+    if (typeof value === 'number') return { value, unit: 'data' };
+    
+    // Parse string values
+    if (typeof value === 'string') {
+        if (value.endsWith('px')) {
+            return { value: parseFloat(value), unit: 'px' };
+        }
+        if (value.endsWith('mm')) {
+            return { value: parseFloat(value), unit: 'mm' };
+        }
+        // Try parsing as number for data units
+        const num = parseFloat(value);
+        if (!isNaN(num)) return { value: num, unit: 'data' };
+    }
+    
+    return { value: 0, unit: 'data' };
+}
+
 function calculateTextPosition(d, accessors, scalesAndTypes, instructions, attributes = {}) {
-    // Get base positions from the data - these are the exact point coordinates
+    // Get base positions from the data
     const x = scalesAndTypes.x.scale(accessors.x(d));
     const y = scalesAndTypes.y.scale(accessors.y(d));
     
-    // Only apply offsets if explicitly specified in attributes
-    const xOffset = attributes.xOffset || 0;
-    const yOffset = attributes.yOffset || 0;
+    // Parse x and y offsets
+    const xOffset = parseOffset(attributes.xOffset);
+    const yOffset = parseOffset(attributes.yOffset);
     
-    // For bar charts, use special positioning
-    if (attributes.barType) {
-        return positionLabelForBar(d, accessors, scalesAndTypes, attributes, instructions);
+    // Calculate final offsets
+    let finalXOffset = 0;
+    let finalYOffset = 0;
+    
+    // Handle X offset
+    if (xOffset.unit === 'data') {
+        // For data units, apply the scale
+        const scaledX = scalesAndTypes.x.scale(accessors.x(d) + xOffset.value);
+        finalXOffset = scaledX - x;
+    } else if (xOffset.unit === 'px') {
+        finalXOffset = xOffset.value;
+    } else if (xOffset.unit === 'mm') {
+        finalXOffset = xOffset.value * (96 / 25.4); // Convert mm to pixels
     }
     
-    // For regular point labels, center at the data point by default
+    // Handle Y offset
+    if (yOffset.unit === 'data') {
+        // For data units, apply the scale
+        const scaledY = scalesAndTypes.y.scale(accessors.y(d) + yOffset.value);
+        finalYOffset = scaledY - y;
+    } else if (yOffset.unit === 'px') {
+        finalYOffset = yOffset.value;
+    } else if (yOffset.unit === 'mm') {
+        finalYOffset = yOffset.value * (96 / 25.4); // Convert mm to pixels
+    }
+    
     return {
-        x: x + xOffset,
-        y: y + yOffset
+        x: x + finalXOffset,
+        y: y + finalYOffset
     };
 }
 

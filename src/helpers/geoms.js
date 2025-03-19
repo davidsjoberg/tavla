@@ -1,15 +1,26 @@
 import * as textUtils from './text_utils.js';
+import * as sizeUtils from './size_utils.js';
 
 export {
   geomDatabase,
   getGeometryScaleConfig,
   getLegendRepresentation,
-  getGeometryMargins
+  getGeometryMargins,
+  getPrimaryGeometry,
+  applyGeometryScaleAdjustments,
+  ensureElementsWithinBounds
 };
 
-// Database of geometry specifications
+/**
+ * Database of geometry specifications
+ * Each geometry is completely self-contained with all its required functionality
+ */
 const geomDatabase = {
     point: {
+        id: 'point',
+        description: 'Scatter plot points',
+        utilities: ['getSymbolPath'],
+        
         // Binding rules
         binding_rules: {
             required_bindings: ['x', 'y'],
@@ -25,7 +36,17 @@ const geomDatabase = {
             left: 0.02     // 2% of width
         },
         
-        // Scale adjustment function for point geometry
+        // Scale configuration specifically for this geometry
+        scale_config: {
+            padding: {
+                x: 0.05,    // 5% padding on both sides of x-axis
+                y: 0.05     // 5% padding on both sides of y-axis
+            },
+            useNice: false, // Don't use nice() for scatter plots to prevent overexpansion
+            enforceZero: false // Don't force y-axis to include zero
+        },
+        
+        // Function to adjust scales based on this geometry's needs
         adjust_scales: function(scalesAndTypes, extents, dimensions, layerBoundingBoxes) {
             // Analyze all layers to determine proper padding
             let needsExtraPadding = false;
@@ -77,7 +98,10 @@ const geomDatabase = {
             const { accessors, delegations, attributes, transformed_data } = layerInfo;
             const { var_bindings, var_attributes, var_groupies } = delegations;
             let layer_data = transformed_data || _instructions.data;
-        
+            
+            // Calculate default sizes based on panel dimensions
+            const defaultSizes = sizeUtils.calculateDefaultSizes(_instructions.dimensions);
+            
             const geomPoints = _svg.append('g')
                 .selectAll('.point-group')
                 .data(d3.group(layer_data, d => {
@@ -92,14 +116,41 @@ const geomDatabase = {
                 .data(d => d[1])
                 .join('path')
                 .attr('transform', d => `translate(${scalesAndTypes.x.scale(accessors.x(d))}, ${scalesAndTypes.y.scale(accessors.y(d))})`)
-        
-            // Size
+            
+            // Size - updated with panel-aware defaults and unit handling
             if (var_bindings.includes('size')) {
-                geomPoints.attr('d', d => d3.symbol().type(d3.symbolCircle).size(scalesAndTypes.size.scale(accessors.size(d)))());
+                // When size is bound to data, scale the values relative to panel
+                geomPoints.attr('d', d => {
+                    // Get data value from scale
+                    const scaledValue = scalesAndTypes.size.scale(accessors.size(d));
+                    
+                    // For bound sizes, we use the scale's output as a multiplier for the default
+                    const finalSize = sizeUtils.scaleToPanel(
+                        scaledValue / 50, // Normalize scale output to be reasonable multipliers
+                        'point',
+                        'symbolSize',
+                        defaultSizes
+                    );
+                    
+                    return d3.symbol().type(d3.symbolCircle).size(finalSize)();
+                });
             } else if (var_attributes.includes('size')) {
-                geomPoints.attr('d', d3.symbol().size(attributes.size * 64).type(d3.symbolCircle)());
+                // When size is provided as an attribute
+                // Parse the size value to detect units
+                const parsedSize = sizeUtils.parseSizeValue(attributes.size);
+                
+                // Convert to pixels based on unit and panel size
+                const finalSize = sizeUtils.convertToPixels(
+                    parsedSize,
+                    'point',
+                    'symbolSize',
+                    defaultSizes
+                );
+                
+                geomPoints.attr('d', d3.symbol().size(finalSize).type(d3.symbolCircle)());
             } else {
-                geomPoints.attr('d', d3.symbol().size(64).type(d3.symbolCircle)());
+                // Use the default size based on panel dimensions
+                geomPoints.attr('d', d3.symbol().size(defaultSizes.point.symbolSize).type(d3.symbolCircle)());
             }
         
             // Shape
@@ -129,11 +180,19 @@ const geomDatabase = {
                 geomPoints.attr('stroke', 'black');
             }
             
-            // Stroke width
+            // Stroke width - updated with panel-aware defaults and unit handling
             if (var_attributes.includes('strokeWidth')) {
-                geomPoints.attr('stroke-width', attributes.strokeWidth);
+                const parsedStrokeWidth = sizeUtils.parseSizeValue(attributes.strokeWidth);
+                const finalStrokeWidth = sizeUtils.convertToPixels(
+                    parsedStrokeWidth, 
+                    'point', 
+                    'strokeWidth',
+                    defaultSizes
+                );
+                geomPoints.attr('stroke-width', finalStrokeWidth);
             } else {
-                geomPoints.attr('stroke-width', 1);
+                // Use the default stroke width based on panel dimensions
+                geomPoints.attr('stroke-width', defaultSizes.point.strokeWidth);
             }
             
             // Alpha (transparency)
@@ -144,16 +203,6 @@ const geomDatabase = {
             } else {
                 geomPoints.attr('opacity', 0.7);
             }
-        },
-        
-        // Scale adjustment configuration
-        scale_config: {
-            padding: {
-                x: 0.05,    // 5% padding on both sides of x-axis
-                y: 0.05     // 5% padding on both sides of y-axis
-            },
-            useNice: false, // Don't use nice() for scatter plots to prevent overexpansion
-            enforceZero: false // Don't force y-axis to include zero
         },
         
         // Legend representation configuration
@@ -198,6 +247,10 @@ const geomDatabase = {
     },
     
     line: {
+        id: 'line',
+        description: 'Line chart',
+        utilities: ['getStrokeDashArray'],
+        
         // Binding rules
         binding_rules: {
             required_bindings: ['x', 'y'],
@@ -245,8 +298,10 @@ const geomDatabase = {
         render_function: function render_geom(_svg, layerName, _instructions, layerInfo, scalesAndTypes) {
             const { accessors, delegations, attributes, transformed_data } = layerInfo;
             const { var_bindings, var_attributes, var_groupies } = delegations;
-
             const layer_data = transformed_data || _instructions.data;
+            
+            // Calculate default sizes based on panel dimensions
+            const defaultSizes = sizeUtils.calculateDefaultSizes(_instructions.dimensions);
 
             if (!accessors.x || !accessors.y) {
                 throw new Error("Missing required accessors for 'x' and/or 'y'.");
@@ -271,15 +326,38 @@ const geomDatabase = {
                 )
                 .attr('fill', 'none');
 
-            // Line size (thickness)
+            // Line size (thickness) - updated with panel-aware defaults and unit handling
             if (var_bindings.includes('size')) {
-                geomLines.attr('stroke-width', d => scalesAndTypes.size.scale(accessors.size(d[0])));
+                geomLines.attr('stroke-width', d => {
+                    // Get data value from scale
+                    const scaledValue = scalesAndTypes.size.scale(accessors.size(d[0]));
+                    
+                    // Convert to appropriate size based on panel dimensions
+                    return sizeUtils.scaleToPanel(
+                        scaledValue / 50, // Normalize scale output
+                        'line',
+                        'strokeWidth',
+                        defaultSizes
+                    );
+                });
             } else if (var_attributes.includes('size')) {
-                geomLines.attr('stroke-width', attributes.size);
+                // Parse the size value to detect units
+                const parsedSize = sizeUtils.parseSizeValue(attributes.size);
+                
+                // Convert to pixels based on unit and panel size
+                const finalSize = sizeUtils.convertToPixels(
+                    parsedSize,
+                    'line',
+                    'strokeWidth',
+                    defaultSizes
+                );
+                
+                geomLines.attr('stroke-width', finalSize);
             } else {
-                geomLines.attr('stroke-width', 2);
-            }            
-
+                // Use the default size based on panel dimensions
+                geomLines.attr('stroke-width', defaultSizes.line.strokeWidth);
+            }
+            
             // Line color
             if (var_bindings.includes('color')) {
                 geomLines.attr('stroke', d => scalesAndTypes.color.scale(accessors.color(d[0])));
@@ -314,16 +392,6 @@ const geomDatabase = {
             } else {
                 geomLines.attr('opacity', 0.9);
             }
-        },
-        
-        // Scale adjustment configuration
-        scale_config: {
-            padding: {
-                x: 0.05,    // 5% padding on x-axis
-                y: 0.05     // 5% padding on y-axis
-            },
-            useNice: true,  // Use nice() for better tick placement
-            enforceZero: false // Don't force y-axis to include zero
         },
         
         // Legend representation configuration
@@ -366,6 +434,10 @@ const geomDatabase = {
     },
     
     text: {
+        id: 'text',
+        description: 'Text labels',
+        utilities: ['calculateTextPosition'],
+        
         // Binding rules
         binding_rules: {
             required_bindings: ['x', 'y', 'text'],
@@ -402,11 +474,14 @@ const geomDatabase = {
             return scalesAndTypes;
         },
 
-        // Render function for text geometry
+        // Render function for text geometry - with extreme size reduction
         render_function: function render_geom(_svg, layerName, _instructions, layerInfo, scalesAndTypes) {
             const { accessors, delegations, attributes, transformed_data } = layerInfo;
             const { var_bindings, var_attributes, var_groupies } = delegations;
             let layer_data = transformed_data || _instructions.data;
+            
+            // Calculate default sizes based on panel dimensions
+            const defaultSizes = sizeUtils.calculateDefaultSizes(_instructions.dimensions);
 
             const groupedTextData = d3.group(layer_data, d => {
                 const groupKey = var_groupies.map(key => accessors[key](d));
@@ -429,18 +504,47 @@ const geomDatabase = {
                 d3.select(this)
                     .attr('x', position.x)
                     .attr('y', position.y)
-                    .attr('text-anchor', 'middle') // Center text horizontally
+                    .attr('text-anchor', attributes.textAnchor || 'middle')     // Center horizontally
+                    .attr('dominant-baseline', attributes.baseline || 'middle')  // Center vertically
                     .text(accessors.text(d));
             });
 
-            // Size
+            // Size - updated with ULTRA SMALL size handling
             if (var_bindings.includes('size')) {
-                textElements.attr('font-size', d => Math.pow(scalesAndTypes.size.scale(accessors.size(d)), 0.2) * 7);
+                textElements.attr('font-size', d => {
+                    // Get data value from scale
+                    const scaledValue = scalesAndTypes.size.scale(accessors.size(d));
+                    
+                    // Apply an extreme size reduction
+                    const baseSize = Math.pow(scaledValue / 50, 0.05) * (defaultSizes.text.fontSize * 0.6);
+                    return baseSize; // Much smaller than previous implementation
+                });
             } else if (var_attributes.includes('size')) {
-                textElements.attr('font-size', attributes.size);
+                // Parse the size value to detect units
+                const parsedSize = sizeUtils.parseSizeValue(attributes.size);
+                
+                // For relative sizes, scale down drastically
+                if (parsedSize.unit === 'relative') {
+                    parsedSize.value = parsedSize.value * 0.2; // Reduce by 80%
+                }
+                
+                // Convert to pixels based on unit and panel size
+                const finalSize = sizeUtils.convertToPixels(
+                    parsedSize,
+                    'text',
+                    'fontSize',
+                    defaultSizes
+                );
+                
+                textElements.attr('font-size', finalSize);
             } else {
-                textElements.attr('font-size', 12);
+                // Use the default size based on panel dimensions
+                // This is already heavily reduced in the calculateDefaultSizes function
+                textElements.attr('font-size', defaultSizes.text.fontSize);
             }
+
+            // Additional font weight adjustment to improve readability at small sizes
+            textElements.attr('font-weight', attributes.fontWeight || 'normal');
 
             // Fill/Color
             if (var_bindings.includes('color')) {
@@ -463,16 +567,6 @@ const geomDatabase = {
             } else {
                 textElements.attr('opacity', 0.85);
             }
-        },
-        
-        // Scale adjustment configuration
-        scale_config: {
-            padding: {
-                x: 0.08,    // 8% padding on x-axis
-                y: 0.08     // 8% padding on y-axis
-            },
-            useNice: true,  // Use nice() for better tick placement
-            enforceZero: false // Don't force y-axis to include zero
         },
         
         // Legend representation configuration
@@ -502,6 +596,10 @@ const geomDatabase = {
     },
     
     bar: {
+        id: 'bar',
+        description: 'Bar chart',
+        utilities: [],
+        
         // Binding rules
         binding_rules: {
             required_bindings: ['x', 'y'],
@@ -544,6 +642,9 @@ const geomDatabase = {
             const { accessors, delegations, attributes } = layerInfo;
             const { var_bindings, var_attributes, var_groupies } = delegations;
             const layer_data = _instructions.data;
+            
+            // Calculate default sizes based on panel dimensions
+            const defaultSizes = sizeUtils.calculateDefaultSizes(_instructions.dimensions);
 
             // Get bar type - default to 'dodge' if not specified
             const barType = attributes.type || 'dodge';
@@ -729,16 +830,6 @@ const geomDatabase = {
             return barGroups;
         },
         
-        // Scale adjustment configuration
-        scale_config: {
-            padding: {
-                x: 0.01,    // 1% padding on x-axis
-                y: 0.05     // 5% padding on y-axis
-            },
-            useNice: true,   // Use nice() for better tick placement
-            enforceZero: true // Force y-axis to include zero
-        },
-        
         // Legend representation configuration
         legend_representation: {
             discrete: (value, color, attributes) => {
@@ -769,6 +860,8 @@ const geomDatabase = {
 
 /**
  * Returns the scale configuration for a given geometry type
+ * @param {string} geometryType - Type of geometry
+ * @return {object} Scale configuration
  */
 function getGeometryScaleConfig(geometryType) {
     const defaultConfig = {
@@ -786,6 +879,12 @@ function getGeometryScaleConfig(geometryType) {
 
 /**
  * Returns the legend representation for a given geometry type
+ * @param {string} geometryType - Type of geometry
+ * @param {boolean} isDiscrete - Whether the scale is discrete
+ * @param {*} value - Value to represent
+ * @param {string} color - Color to use
+ * @param {object} attributes - Additional attributes
+ * @return {object} Legend representation configuration
  */
 function getLegendRepresentation(geometryType, isDiscrete, value, color, attributes) {
     if (!geometryType || !geomDatabase[geometryType]) {
@@ -818,6 +917,8 @@ function getLegendRepresentation(geometryType, isDiscrete, value, color, attribu
 
 /**
  * Returns margin specifications for a given geometry type
+ * @param {string} geometryType - Type of geometry
+ * @return {object} Margin specifications
  */
 function getGeometryMargins(geometryType) {
     const defaultMargins = {
@@ -832,6 +933,178 @@ function getGeometryMargins(geometryType) {
     }
     
     return geomDatabase[geometryType].margin_specs || defaultMargins;
+}
+
+/**
+ * Determines the primary geometry type from layers
+ * @param {object} layers - Layers configuration
+ * @return {string} Primary geometry type
+ */
+function getPrimaryGeometry(layers) {
+    if (!layers || Object.keys(layers).length === 0) {
+        return 'point'; // Default
+    }
+    
+    // Get the first layer's geometry type
+    return Object.values(layers)[0]?.geometry || 'point';
+}
+
+/**
+ * Applies padding and scale adjustments based on geometry type
+ * MOVED FROM dirigent.js to maintain layer-specific logic here
+ * @param {object} instructions - Instruction object
+ * @return {object} Updated instruction object
+ */
+function applyGeometryScaleAdjustments(instructions) {
+    const { scalesAndTypes, layers, extents, dimensions, layerBoundingBoxes } = instructions;
+    
+    // Get the primary geometry type
+    const primaryGeometry = getPrimaryGeometry(layers);
+    
+    // Get the geometry-specific configuration
+    const geometry = geomDatabase[primaryGeometry];
+    
+    // If this geometry has a custom scale adjustment function, use it
+    if (geometry && typeof geometry.adjust_scales === 'function') {
+        return {
+            ...instructions,
+            scalesAndTypes: geometry.adjust_scales(scalesAndTypes, extents, dimensions, layerBoundingBoxes)
+        };
+    }
+    
+    // Otherwise use the standard approach with geometry's scale config
+    const scaleConfig = getGeometryScaleConfig(primaryGeometry);
+    
+    // Handle X-axis padding based on scale type
+    if (scalesAndTypes.x && scalesAndTypes.x.type === "number" && 
+        typeof scalesAndTypes.x.scale.invert === 'function') {
+        
+        // Get current domain
+        const domain = scalesAndTypes.x.scale.domain();
+        const dataRange = domain[1] - domain[0];
+        
+        // Calculate padding amount based on data range and geometry-specific config
+        const padding = dataRange * scaleConfig.padding.x;
+        
+        // Apply padding consistently
+        const newDomain = [domain[0] - padding, domain[1] + padding];
+        
+        // Apply nice() based on geometry preference
+        if (scaleConfig.useNice) {
+            scalesAndTypes.x.scale.domain(newDomain).nice();
+        } else {
+            scalesAndTypes.x.scale.domain(newDomain);
+        }
+    }
+    
+    // Handle Y-axis padding based on chart type
+    if (scalesAndTypes.y && scalesAndTypes.y.type === "number" && 
+        typeof scalesAndTypes.y.scale.invert === 'function') {
+        
+        // For geometries that enforce zero on Y-axis (like bars)
+        if (scaleConfig.enforceZero) {
+            const yMax = scalesAndTypes.y.scale.domain()[1];
+            const yPadding = yMax * scaleConfig.padding.y;
+            scalesAndTypes.y.scale.domain([0, yMax + yPadding])
+                .nice(scaleConfig.useNice ? undefined : null);
+        } 
+        else {
+            // For other chart types, apply padding to both sides
+            const domain = scalesAndTypes.y.scale.domain();
+            const dataRange = domain[1] - domain[0];
+            const padding = dataRange * scaleConfig.padding.y;
+            
+            const newDomain = [domain[0] - padding, domain[1] + padding];
+            
+            // Apply nice() based on geometry preference
+            if (scaleConfig.useNice) {
+                scalesAndTypes.y.scale.domain(newDomain).nice();
+            } else {
+                scalesAndTypes.y.scale.domain(newDomain);
+            }
+        }
+    }
+    
+    return instructions;
+}
+
+/**
+ * Ensures all elements are within bounds by adjusting scales
+ * MOVED FROM dirigent.js to maintain layer-specific logic here
+ * @param {object} instructions - Instruction object
+ * @param {object} layerBoundingBoxes - Bounding boxes for each layer
+ * @return {object} Updated instruction object
+ */
+function ensureElementsWithinBounds(instructions, layerBoundingBoxes) {
+    const { scalesAndTypes, dimensions } = instructions;
+    
+    // Ensure we have bounding boxes to work with
+    if (!layerBoundingBoxes || Object.keys(layerBoundingBoxes).length === 0) {
+        return instructions; // Can't do any adjustments
+    }
+    
+    // Get the plot area bounds
+    const plotWidth = dimensions.ctrWidth;
+    const plotHeight = dimensions.ctrHeight;
+    
+    // Calculate a proportional safety buffer based on plot size
+    const safetyBuffer = Math.max(5, Math.min(plotWidth, plotHeight) * 0.01);
+    
+    // Find min/max values across all layers
+    let overallMinX = Infinity, overallMinY = Infinity;
+    let overallMaxX = -Infinity, overallMaxY = -Infinity;
+    
+    Object.values(layerBoundingBoxes).forEach(bbox => {
+        overallMinX = Math.min(overallMinX, bbox.minX);
+        overallMinY = Math.min(overallMinY, bbox.minY);
+        overallMaxX = Math.max(overallMaxX, bbox.maxX);
+        overallMaxY = Math.max(overallMaxY, bbox.maxY);
+    });
+    
+    // Add buffer to ensure elements remain fully inside
+    const leftOverflow = (overallMinX < safetyBuffer) ? safetyBuffer - overallMinX : 0;
+    const rightOverflow = (overallMaxX > plotWidth - safetyBuffer) ? overallMaxX - (plotWidth - safetyBuffer) : 0;
+    const topOverflow = (overallMinY < safetyBuffer) ? safetyBuffer - overallMinY : 0;
+    const bottomOverflow = (overallMaxY > plotHeight - safetyBuffer) ? overallMaxY - (plotHeight - safetyBuffer) : 0;
+    
+    // If there's any overflow, adjust the scales
+    if (leftOverflow > 0 || rightOverflow > 0) {
+        // Adjust x scale to accommodate overflow
+        if (scalesAndTypes.x && scalesAndTypes.x.type === "number") {
+            const xScale = scalesAndTypes.x.scale;
+            if (typeof xScale.invert === 'function') {
+                const domain = xScale.domain();
+                const dataRange = domain[1] - domain[0];
+                const pixelRange = plotWidth;
+                const dataPerPixel = dataRange / pixelRange;
+                
+                const newXMin = domain[0] - (leftOverflow * dataPerPixel);
+                const newXMax = domain[1] + (rightOverflow * dataPerPixel);
+                
+                xScale.domain([newXMin, newXMax]);
+            }
+        }
+    }
+    
+    if (topOverflow > 0 || bottomOverflow > 0) {
+        // Adjust y scale to accommodate overflow
+        if (scalesAndTypes.y && scalesAndTypes.y.type === "number") {
+            const yScale = scalesAndTypes.y.scale;
+            if (typeof yScale.invert === 'function') {
+                const domain = yScale.domain();
+                const dataRange = domain[1] - domain[0];
+                const pixelRange = plotHeight;
+                const dataPerPixel = dataRange / pixelRange;
+                
+                const newYMin = domain[0] - (bottomOverflow * dataPerPixel);
+                const newYMax = domain[1] + (topOverflow * dataPerPixel);
+                
+                yScale.domain([newYMin, newYMax]);
+            }
+        }
+    }
+    
+    return instructions;
 }
 
 /**
@@ -868,4 +1141,31 @@ function getSymbolPath(shape, size) {
   return d3.symbol().type(symbolFunc).size(size)();
 }
 
-// ...rest of existing helper functions...
+/**
+ * Updates scales range based on data values and geometry default sizes
+ * @param {object} instructions - Instruction object with dimensions and scales
+ */
+function updateScaleRanges(instructions) {
+    const { dimensions, scalesAndTypes } = instructions;
+    const defaultSizes = sizeUtils.calculateDefaultSizes(dimensions);
+    
+    // For each scale type, update based on panel size
+    for (const key in scalesAndTypes) {
+        if (key === 'size') {
+            // Size scales should be based on panel dimensions
+            // For example, point sizes might range from 0.2x to 3x the default
+            const minSize = defaultSizes.point.symbolSize * 0.2;  // 20% of default 
+            const maxSize = defaultSizes.point.symbolSize * 3;    // 3x default
+            
+            // If it's a numeric scale, use these values as the range
+            if (scalesAndTypes[key].type === "number") {
+                scalesAndTypes[key].scale.range([minSize, maxSize]);
+            }
+        }
+        // Similar adjustments could be made for other scale types
+    }
+    
+    return instructions;
+}
+
+// ...other helper functions...

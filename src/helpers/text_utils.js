@@ -1,95 +1,98 @@
 /**
- * Position text labels according to their context
- * @param {Object} d - Data point
- * @param {Object} accessors - Data accessors
- * @param {Object} scalesAndTypes - Scales for rendering
- * @param {Object} _instructions - Full instructions object
- * @param {Object} attributes - Layer attributes
- * @returns {Object} Position with x and y coordinates
+ * Text positioning utilities for better label placement
  */
-export function calculateTextPosition(d, accessors, scalesAndTypes, _instructions, attributes) {
+
+export { calculateTextPosition };
+
+function calculateTextPosition(d, accessors, scalesAndTypes, instructions, attributes = {}) {
+    // Get base positions from the data - these are the exact point coordinates
+    const x = scalesAndTypes.x.scale(accessors.x(d));
+    const y = scalesAndTypes.y.scale(accessors.y(d));
+    
+    // Only apply offsets if explicitly specified in attributes
+    const xOffset = attributes.xOffset || 0;
+    const yOffset = attributes.yOffset || 0;
+    
+    // For bar charts, use special positioning
+    if (attributes.barType) {
+        return positionLabelForBar(d, accessors, scalesAndTypes, attributes, instructions);
+    }
+    
+    // For regular point labels, center at the data point by default
+    return {
+        x: x + xOffset,
+        y: y + yOffset
+    };
+}
+
+/**
+ * Calculate position adjustment based on data point context
+ */
+function getPositionAdjustment(d, accessors, scalesAndTypes, attributes) {
+    // Default position adjustment
+    const adjustment = { x: 0, y: 0 };
+    
+    // Adjust labels to be above points by default
+    if (attributes.position === 'above' || (!attributes.position && accessors.y)) {
+        adjustment.y = -10; // Default offset above data points
+    } else if (attributes.position === 'below') {
+        adjustment.y = 15; // Default offset below data points
+    }
+    
+    // If the text is for a data value, check if we should adjust based on value
+    if (accessors.text && accessors.y && typeof accessors.text(d) === 'number') {
+        const value = accessors.y(d);
+        // If it's a negative value, position the label below the point
+        if (value < 0) {
+            adjustment.y = Math.abs(adjustment.y) + 5;
+        }
+    }
+    
+    return adjustment;
+}
+
+/**
+ * Special positioning for bar chart labels
+ */
+function positionLabelForBar(d, accessors, scalesAndTypes, attributes, instructions) {
+    const barType = attributes.barType;
+    
+    // Default offsets
+    const xOffset = attributes.xOffset || 0;
+    const yOffset = attributes.yOffset || -5; // Default above the bar
+    
     let x, y;
     
-    // Get the category and color values
-    const category = accessors.x(d);
-    const colorValue = accessors.color ? accessors.color(d) : null;
-    const yValue = accessors.y(d);
-    
-    // Basic y-position
-    y = scalesAndTypes.y.scale(yValue);
-    
-    // Adjust for text height offset if specified
-    if (attributes.yOffset) {
-        y += attributes.yOffset;
+    if (barType === 'dodge') {
+        // For grouped bars, need to account for the subgroup position
+        const category = accessors.x(d);
+        const colorValue = accessors.color ? accessors.color(d) : 'default';
+        
+        // If we have bar width information, we can calculate the center
+        const colorValues = instructions.data
+            .filter(item => accessors.x(item) === category)
+            .map(item => accessors.color ? accessors.color(item) : 'default');
+        
+        const uniqueColors = [...new Set(colorValues)];
+        
+        // Calculate the position within the group
+        const bandWidth = scalesAndTypes.x.scale.bandwidth();
+        const subBandWidth = bandWidth / uniqueColors.length;
+        const subgroupIndex = uniqueColors.indexOf(colorValue);
+        
+        x = scalesAndTypes.x.scale(category) + (subgroupIndex * subBandWidth) + (subBandWidth / 2);
+    } else {
+        // For regular or stacked bars, just use the center of the bar
+        x = scalesAndTypes.x.scale(accessors.x(d)) + scalesAndTypes.x.scale.bandwidth() / 2;
     }
     
-    // If this is a categorical x scale with bandwidth
-    if (scalesAndTypes.x.scale.bandwidth) {
-        // Calculate x position based on barType if specified
-        if (attributes.barType === 'dodge' && colorValue !== null) {
-            // For dodge bar type, reproduce the subgroup scale from the parameters
-            // instead of relying on another layer's calculation
-            
-            // Create a new subgroup scale using the same parameters
-            const groupPadding = attributes.groupPadding !== undefined ? attributes.groupPadding : 0.1;
-            const barPadding = attributes.barPadding !== undefined ? attributes.barPadding : 0.05;
-            
-            // Get all possible color values from the dataset
-            let allColorValues = [];
-            try {
-                // Find the color column using bindings
-                const bindings = _instructions.bindings || {};
-                const colorBinding = Object.entries(bindings).find(([key]) => key === 'color');
-                
-                if (colorBinding && colorBinding[1]) {
-                    const colorColumn = colorBinding[1];
-                    // Extract all unique values
-                    allColorValues = [...new Set(_instructions.data.map(item => item[colorColumn]))];
-                }
-            } catch (err) {
-                console.warn("Error getting color values", err);
-                // Proceed with empty array - will use default positioning
-            }
-            
-            if (allColorValues.length > 0) {
-                // Create a scale for bar positioning within group - same as the bar layer would
-                const subgroupScale = d3.scaleBand()
-                    .domain(allColorValues)
-                    .range([0, scalesAndTypes.x.scale.bandwidth()])
-                    .padding(barPadding);
-                
-                // Try to find the color value in the data to match against color values
-                const dataColorValue = allColorValues.find(val => val === colorValue);
-                
-                if (dataColorValue) {
-                    // Position text in the middle of each bar
-                    x = scalesAndTypes.x.scale(category) + 
-                        subgroupScale(dataColorValue) + 
-                        (subgroupScale.bandwidth() / 2);
-                } else {
-                    // Fallback to center of category if color value isn't found
-                    x = scalesAndTypes.x.scale(category) + (scalesAndTypes.x.scale.bandwidth() / 2);
-                }
-            } else {
-                // Fallback to center of category
-                x = scalesAndTypes.x.scale(category) + (scalesAndTypes.x.scale.bandwidth() / 2);
-            }
-        } 
-        else if (attributes.barType === 'stack') {
-            // For stacked bars, center within the category
-            x = scalesAndTypes.x.scale(category) + 
-                (scalesAndTypes.x.scale.bandwidth() / 2);
-        }
-        else {
-            // Default to middle of band
-            x = scalesAndTypes.x.scale(category) + 
-                (scalesAndTypes.x.scale.bandwidth() / 2);
-        }
-    }
-    else {
-        // For non-categorical scales, use the scale directly
-        x = scalesAndTypes.x.scale(accessors.x(d));
-    }
+    // Y position depends on the bar value
+    const value = accessors.y(d);
+    y = scalesAndTypes.y.scale(value);
     
-    return { x, y };
+    // Return final position with offsets
+    return {
+        x: x + xOffset,
+        y: y + yOffset
+    };
 }

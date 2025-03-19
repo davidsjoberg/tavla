@@ -9,7 +9,7 @@ import * as legend from './helpers/legend.js';
 
 function dirigent(_div, _instructions, _plot_width, _plotId) {
   try {
-    // Step 1: Add geoms needed
+    // Step 1: Add geoms needed - using the centralized geom database
     _instructions = preps.get_geometries(_instructions, geoms.geomDatabase); 
     
     // Step 2: Create scales and prepare data
@@ -37,7 +37,7 @@ function dirigent(_div, _instructions, _plot_width, _plotId) {
     const tempContainer = tempSvg.append("g")
       .attr("transform", `translate(${_instructions.dimensions.marginLeft}, ${_instructions.dimensions.marginTop})`);
     
-    // Step 7: Render all layers headlessly to measure
+    // Step 7: Render all layers headlessly to measure - layer-agnostic approach
     const render_functions_list = preps.extractRenderFunctions(_instructions);
     
     // Create separate layer groups to track each layer's elements
@@ -57,7 +57,7 @@ function dirigent(_div, _instructions, _plot_width, _plotId) {
       }
     }
     
-    // Step 8: Calculate bounds and adjust scales
+    // Step 8: Calculate bounds and adjust scales - use geometry-specific functions
     try {
       // First collect bounding boxes for each individual layer
       const layerBoundingBoxes = {};
@@ -101,15 +101,14 @@ function dirigent(_div, _instructions, _plot_width, _plotId) {
         }
       }
       
-      // Get plot panel dimensions
-      const plotWidth = _instructions.dimensions.ctrWidth;
-      const plotHeight = _instructions.dimensions.ctrHeight;
+      // Save bounding boxes for later use by any geometry that needs them
+      _instructions.layerBoundingBoxes = layerBoundingBoxes;
       
-      // First ensure elements are within bounds
-      _instructions = ensureElementsWithinBounds(_instructions, layerBoundingBoxes);
+      // First ensure elements are within bounds - use geometry-specific function
+      _instructions = geoms.ensureElementsWithinBounds(_instructions, layerBoundingBoxes);
       
-      // Then apply consistent padding
-      _instructions = applyUniversalPadding(_instructions);
+      // Then apply geometry-specific scale adjustments
+      _instructions = geoms.applyGeometryScaleAdjustments(_instructions);
       
     } catch (e) {
       console.error("Error calculating bounds:", e);
@@ -164,146 +163,4 @@ function dirigent(_div, _instructions, _plot_width, _plotId) {
     
     return errorSvg.node().parentNode;
   }
-}
-
-// Updated universal padding function to use geometry-specific configurations
-function applyUniversalPadding(_instructions) {
-  const { scalesAndTypes, layers } = _instructions;
-  
-  // Get the primary geometry type
-  const primaryGeometry = Object.values(layers)[0]?.geometry || 'point';
-  
-  // Get the geometry-specific scale configuration
-  const scaleConfig = geoms.getGeometryScaleConfig(primaryGeometry);
-  
-  // Handle X-axis padding based on scale type
-  if (scalesAndTypes.x && scalesAndTypes.x.type === "number" && 
-      typeof scalesAndTypes.x.scale.invert === 'function') {
-    
-    // Get current domain
-    const domain = scalesAndTypes.x.scale.domain();
-    const dataRange = domain[1] - domain[0];
-    
-    // Calculate padding amount based on data range and geometry-specific config
-    const padding = dataRange * scaleConfig.padding.x;
-    
-    // Apply padding consistently
-    const newDomain = [domain[0] - padding, domain[1] + padding];
-    
-    // Apply nice() based on geometry preference
-    if (scaleConfig.useNice) {
-      scalesAndTypes.x.scale.domain(newDomain).nice();
-    } else {
-      scalesAndTypes.x.scale.domain(newDomain);
-    }
-  }
-  
-  // Handle Y-axis padding based on chart type
-  if (scalesAndTypes.y && scalesAndTypes.y.type === "number" && 
-      typeof scalesAndTypes.y.scale.invert === 'function') {
-    
-    // For geometries that enforce zero on Y-axis (like bars)
-    if (scaleConfig.enforceZero) {
-      const yMax = scalesAndTypes.y.scale.domain()[1];
-      const yPadding = yMax * scaleConfig.padding.y;
-      scalesAndTypes.y.scale.domain([0, yMax + yPadding])
-        .nice(scaleConfig.useNice ? undefined : null);
-    } 
-    else {
-      // For other chart types, apply padding to both sides
-      const domain = scalesAndTypes.y.scale.domain();
-      const dataRange = domain[1] - domain[0];
-      const padding = dataRange * scaleConfig.padding.y;
-      
-      const newDomain = [domain[0] - padding, domain[1] + padding];
-      
-      // Apply nice() based on geometry preference
-      if (scaleConfig.useNice) {
-        scalesAndTypes.y.scale.domain(newDomain).nice();
-      } else {
-        scalesAndTypes.y.scale.domain(newDomain);
-      }
-    }
-  }
-  
-  return _instructions;
-}
-
-// Add a new function to check if elements are within bounds
-function ensureElementsWithinBounds(_instructions, layerBoundingBoxes) {
-  // Gets all rendered elements and checks their bounds against the plot area
-  // This is especially important for scatter plots with large points
-  
-  const { scalesAndTypes, dimensions } = _instructions;
-  
-  // Ensure we have bounding boxes to work with
-  if (!layerBoundingBoxes || Object.keys(layerBoundingBoxes).length === 0) {
-    return _instructions; // Can't do any adjustments
-  }
-  
-  // Get the plot area bounds
-  const plotWidth = dimensions.ctrWidth;
-  const plotHeight = dimensions.ctrHeight;
-  
-  // Find min/max values across all layers
-  let overallMinX = Infinity, overallMinY = Infinity;
-  let overallMaxX = -Infinity, overallMaxY = -Infinity;
-  
-  Object.values(layerBoundingBoxes).forEach(bbox => {
-    overallMinX = Math.min(overallMinX, bbox.minX);
-    overallMinY = Math.min(overallMinY, bbox.minY);
-    overallMaxX = Math.max(overallMaxX, bbox.maxX);
-    overallMaxY = Math.max(overallMaxY, bbox.maxY);
-  });
-  
-  // Check if any elements are outside the plot area
-  const leftOverflow = overallMinX < 0 ? Math.abs(overallMinX) : 0;
-  const rightOverflow = overallMaxX > plotWidth ? overallMaxX - plotWidth : 0;
-  const topOverflow = overallMinY < 0 ? Math.abs(overallMinY) : 0;
-  const bottomOverflow = overallMaxY > plotHeight ? overallMaxY - plotHeight : 0;
-  
-  // If there's any overflow, adjust the scales
-  if (leftOverflow > 0 || rightOverflow > 0) {
-    // Adjust x scale to accommodate overflow
-    if (scalesAndTypes.x && scalesAndTypes.x.type === "number") {
-      const xScale = scalesAndTypes.x.scale;
-      if (typeof xScale.invert === 'function') {
-        // Convert pixel overflow to data values
-        const domain = xScale.domain();
-        const dataRange = domain[1] - domain[0];
-        const pixelRange = plotWidth;
-        const dataPerPixel = dataRange / pixelRange;
-        
-        // Calculate new domain
-        const newXMin = domain[0] - (leftOverflow * dataPerPixel);
-        const newXMax = domain[1] + (rightOverflow * dataPerPixel);
-        
-        // Apply new domain
-        xScale.domain([newXMin, newXMax]);
-      }
-    }
-  }
-  
-  if (topOverflow > 0 || bottomOverflow > 0) {
-    // Adjust y scale to accommodate overflow
-    if (scalesAndTypes.y && scalesAndTypes.y.type === "number") {
-      const yScale = scalesAndTypes.y.scale;
-      if (typeof yScale.invert === 'function') {
-        // Convert pixel overflow to data values (y is inverted)
-        const domain = yScale.domain();
-        const dataRange = domain[1] - domain[0];
-        const pixelRange = plotHeight;
-        const dataPerPixel = dataRange / pixelRange;
-        
-        // Calculate new domain (remembering y is inverted in SVG)
-        const newYMin = domain[0] - (bottomOverflow * dataPerPixel);
-        const newYMax = domain[1] + (topOverflow * dataPerPixel);
-        
-        // Apply new domain
-        yScale.domain([newYMin, newYMax]);
-      }
-    }
-  }
-  
-  return _instructions;
 }

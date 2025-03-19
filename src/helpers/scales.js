@@ -1,3 +1,5 @@
+import * as sizeUtils from './size_utils.js';
+
 export { make_scales_to_bindings, updateScaleRanges, scale_expand };
 
 /**
@@ -20,7 +22,7 @@ function createContinuousColorScale(range, domain) {
  */
 function createAppropriateScale(bindingType, domain, userConfig, isNumeric) {
   // Get default range based on binding type and data type
-  const defaultRange = getDefaultRange(bindingType, domain, isNumeric);
+  const defaultRange = getDefaultRange(bindingType, domain, isNumeric, userConfig.dimensions);
   
   // Use user-provided range if available, otherwise use default
   const range = userConfig.range || defaultRange;
@@ -102,8 +104,12 @@ function validateRangeForCategories(range, domain, bindingType) {
 
 /**
  * Get default range based on binding type and data characteristics
+ * Updated to use panel dimensions for size-related bindings
  */
-function getDefaultRange(bindingType, domain, isNumeric) {
+function getDefaultRange(bindingType, domain, isNumeric, dimensions = null) {
+  // Calculate default sizes if dimensions are provided
+  const defaultSizes = dimensions ? sizeUtils.calculateDefaultSizes(dimensions) : null;
+  
   switch(bindingType) {
     case 'color':
     case 'fill':
@@ -113,13 +119,47 @@ function getDefaultRange(bindingType, domain, isNumeric) {
       return isNumeric ? ['#333', '#999'] : d3.schemeSet3.slice(0, domain.length);
     
     case 'size':
-      return isNumeric ? [5, 100] : generateValueRange(20, 80, domain.length);
+      if (defaultSizes) {
+        // For panel-aware sizing
+        if (isNumeric) {
+          // For numeric data, provide a range between 0.5x and 3x the default point size
+          return [defaultSizes.point.symbolSize * 0.5, defaultSizes.point.symbolSize * 3];
+        } else {
+          // For categorical data, generate a range of reasonable sizes
+          const count = domain.length;
+          return generateValueRange(
+            defaultSizes.point.symbolSize * 0.8, 
+            defaultSizes.point.symbolSize * 2, 
+            count
+          );
+        }
+      } else {
+        // Fallback to old behavior if no dimensions provided
+        return isNumeric ? [5, 100] : generateValueRange(20, 80, domain.length);
+      }
+    
+    case 'strokeWidth':
+      if (defaultSizes) {
+        // For panel-aware stroke width sizing
+        if (isNumeric) {
+          // For numeric data, provide a range between 0.5x and 2x the default stroke width
+          return [defaultSizes.point.strokeWidth * 0.5, defaultSizes.point.strokeWidth * 2];
+        } else {
+          // For categorical data, generate a range of reasonable stroke widths
+          const count = domain.length;
+          return generateValueRange(
+            defaultSizes.point.strokeWidth * 0.5,
+            defaultSizes.point.strokeWidth * 2,
+            count
+          );
+        }
+      } else {
+        // Fallback
+        return isNumeric ? [0.5, 3] : generateValueRange(0.5, 3, domain.length);
+      }
     
     case 'alpha':
       return isNumeric ? [0.2, 0.9] : generateValueRange(0.3, 0.9, domain.length);
-    
-    case 'strokeWidth':
-      return isNumeric ? [0.5, 3] : generateValueRange(0.5, 3, domain.length);
     
     default:
       // Generic range for other bindings
@@ -150,6 +190,7 @@ function generateValueRange(minValue, maxValue, count) {
 
 /**
  * Creates scales for all bindings based on data and user configurations
+ * Updated to pass dimensions to getDefaultRange for size-aware bindings
  */
 function make_scales_to_bindings(_instructions) {
   const scalesAndTypes = {};
@@ -205,9 +246,20 @@ function make_scales_to_bindings(_instructions) {
       continue;
     }
     
-    // For all non-positional bindings, use the generalized scale creation
+    // Pass dimensions to getDefaultRange for size-related bindings
+    const defaultRange = getDefaultRange(key, domain, isNumeric, _instructions.dimensions);
+    
+    // Use user-provided range if available, otherwise use calculated default
+    const range = userConfig.range || defaultRange;
+    
+    // For non-color bindings with categorical data, check if we have enough values in range
+    if (!isNumeric && !isColorBinding(key)) {
+      validateRangeForCategories(range, domain, key);
+    }
+    
+    // Create appropriate scale based on binding type and data type
     try {
-      scalesAndTypes[key] = createAppropriateScale(key, domain, userConfig, isNumeric);
+      scalesAndTypes[key] = createAppropriateScale(key, domain, { ...userConfig, range }, isNumeric);
     } catch (error) {
       console.error(`Error creating scale for ${key}:`, error.message);
       throw error;
@@ -226,7 +278,10 @@ function make_scales_to_bindings(_instructions) {
 function updateScaleRanges(_instructions) {
   const { scalesAndTypes, dimensions } = _instructions;
   
-  // Only update position scales (x and y)
+  // Calculate default sizes based on panel dimensions
+  const defaultSizes = sizeUtils.calculateDefaultSizes(dimensions);
+  
+  // Update position scales (x and y)
   for (const key in scalesAndTypes) {
     const scaleObj = scalesAndTypes[key];
     
@@ -235,6 +290,10 @@ function updateScaleRanges(_instructions) {
     }
     else if (key === 'y' && scaleObj.scale.range) {
       scaleObj.scale.range([dimensions.ctrHeight, 0]);
+    }
+    else if (key === 'size' && scaleObj.type === 'number') {
+      // Update size scales based on panel dimensions
+      scaleObj.scale.range([defaultSizes.point.symbolSize * 0.5, defaultSizes.point.symbolSize * 3]);
     }
   }
   

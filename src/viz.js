@@ -176,7 +176,7 @@ const scatter1Config = {
     points: {
       geometry: "point",
       attributes: {
-        size: 100,
+        size: 5,
         alpha: 0.7
       }
     }
@@ -232,7 +232,7 @@ const scatter3Config = {
     points: {
       geometry: "point",
       attributes: {
-        size: 120,
+        size: 30,
         alpha: 0.6
       }
     },
@@ -267,7 +267,7 @@ const scatter4Config = {
     circles: {
       geometry: "point",
       attributes: {
-        size: 100,
+        size: 20,
         color: "#1f77b4", 
         stroke: "#333",
         strokeWidth: 1.5,
